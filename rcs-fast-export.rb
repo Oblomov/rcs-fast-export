@@ -13,6 +13,10 @@ Options:
 	--authors-file, -A	specify a file containing username = Full Name <email> mappings
 	--[no-]tag-each-rev	[do not] create a lightweight tag for each RCS revision
 
+Config options:
+	rcs.authorsFile		for --authors-file
+	rcs.tagEachRev		for --tag-each-rev
+
 EOM
 end
 
