@@ -388,6 +388,11 @@ parse_options = {
 	:authors => Hash.new,
 }
 
+# Read config options
+`git config --get-all rcs.authorsfile`.each_line do |fn|
+	parse_options[:authors].merge! load_authors_file(fn.chomp)
+end
+
 opts.each do |opt, arg|
 	case opt
 	when '--authors-file'
@@ -419,15 +424,6 @@ end
 SFX = ',v'
 
 status = 0
-
-# Read config options
-`git config --get-all rcs.authorsfile`.each_line do |fn|
-	authors = load_authors_file(fn.chomp)
-	# Add but don't overwrite
-	authors.each do |k, v|
-		parse_options[:authors][k] ||= v
-	end
-end
 
 file_list.each do |arg|
 	if arg[-2,2] == SFX
