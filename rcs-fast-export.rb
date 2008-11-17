@@ -114,7 +114,10 @@ module RCS
 						puts "reset refs/tags/#{sym}"
 						puts "from :#{RCS.commit key}"
 					end
-					# TODO option to tag every revision with its revision number
+					if opts[:tag_each_rev]
+						puts "reset refs/tags/#{key}"
+						puts "from :#{RCS.commit key}"
+					end
 
 					exported.push key
 				end
@@ -361,9 +364,11 @@ opts.each do |opt, arg|
 	when '--rcs-suffixes'
 		# TODO
 	when '--tag-each-rev'
-		# TODO
+		parse_options[:tag_each_rev] = true
 	when '--no-tag-each-rev'
-		# TODO
+		# this is the default, which is fine since the missing key
+		# (default) returns nil which is false in Ruby
+		parse_options[:tag_each_rev] = false
 	when ''
 		file_list << arg
 	end
