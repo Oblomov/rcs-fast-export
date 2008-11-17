@@ -14,7 +14,7 @@ end
 def load_authors_file(fn)
 	hash = {}
 	begin
-		File.open(fn) do |io|
+		File.open(File.expand_path fn) do |io|
 			io.each_line do |line|
 				uname, author = line.split('=', 2)
 				uname.strip!
