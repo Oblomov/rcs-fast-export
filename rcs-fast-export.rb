@@ -68,7 +68,7 @@ module RCS
 			@revision.has_key?(rev) and not @revision[rev].author.nil?
 		end
 
-		def export_commits
+		def export_commits(opts={})
 			counter = 0
 			exported = []
 			until @revision.empty?
@@ -329,37 +329,77 @@ module RCS
 				end
 			end
 		end
-		rcs.export_commits
+		rcs.export_commits(opts)
 	end
 end
 
-arg=ARGV[0]
+require 'getoptlong'
 
-if arg.nil?
+opts = GetoptLong.new(
+	# Authors file, like git-svn and git-cvsimport, more than one can be
+	# specified
+	['--authors-file', '-A', GetoptLong::REQUIRED_ARGUMENT],
+	# RCS file suffix, like RCS
+	['--rcs-suffixes', '-x', GetoptLong::REQUIRED_ARGUMENT],
+	# tag each revision?
+	['--tag-each-rev', GetoptLong::NO_ARGUMENT],
+	['--no-tag-each-rev', GetoptLong::NO_ARGUMENT]
+)
+
+# We read options in order, but they apply to all passed parameters.
+# TODO maybe they should only apply to the following, unless there's only one
+# file?
+opts.ordering = GetoptLong::RETURN_IN_ORDER
+
+file_list = []
+parse_options = {}
+
+opts.each do |opt, arg|
+	case opt
+	when '--authors-file'
+		# TODO
+	when '--rcs-suffixes'
+		# TODO
+	when '--tag-each-rev'
+		# TODO
+	when '--no-tag-each-rev'
+		# TODO
+	when ''
+		file_list << arg
+	end
+end
+
+if file_list.empty?
 	usage
 	exit 1
 end
 
 SFX = ',v'
 
-if arg[-2,2] == SFX
-	if File.exists? arg
-		rcsfile = arg.dup
+status = 0
+
+file_list.each do |arg|
+	if arg[-2,2] == SFX
+		if File.exists? arg
+			rcsfile = arg.dup
+		else
+			not_found "RCS file #{arg}"
+			status |= 1
+		end
+		filename = File.basename(arg, SFX)
 	else
-		not_found "RCS file #{arg}"
-		exit 1
-	end
-	filename = File.basename(arg, SFX)
-else
-	filename = File.basename(arg)
-	path = File.dirname(arg)
-	rcsfile = File.join(path, 'RCS', filename) + SFX
-	unless File.exists? rcsfile
-		rcsfile.replace File.join(path, filename) + SFX
+		filename = File.basename(arg)
+		path = File.dirname(arg)
+		rcsfile = File.join(path, 'RCS', filename) + SFX
 		unless File.exists? rcsfile
-			not_found "RCS file for #{filename} in #{path}"
+			rcsfile.replace File.join(path, filename) + SFX
+			unless File.exists? rcsfile
+				not_found "RCS file for #{filename} in #{path}"
+			end
 		end
 	end
+
+	RCS.parse(filename, rcsfile, parse_options)
 end
 
-RCS.parse(filename, rcsfile)
+exit status
