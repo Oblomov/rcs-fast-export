@@ -10,6 +10,25 @@ def not_found(arg)
 	STDERR.puts "Could not find #{arg}"
 end
 
+# returns a hash that maps usernames to author names & emails
+def load_authors_file(fn)
+	hash = {}
+	begin
+		File.open(fn) do |io|
+			io.each_line do |line|
+				uname, author = line.split('=', 2)
+				uname.strip!
+				author.strip!
+				STDERR.puts "Username #{uname} redefined to #{author}" if hash.has_key? uname
+				hash[uname] = author
+			end
+		end
+	rescue
+		not_found(fn)
+	end
+	return hash
+end
+
 class Time
 	def Time.rcs(string)
 		fields = string.split('.')
@@ -97,8 +116,7 @@ module RCS
 					end
 
 					branch = rev.branch || 'master'
-					# TODO map authors to author/email
-					author = "#{rev.author} <empty>"
+					author = opts[:authors][rev.author] || "#{rev.author} <empty>"
 					date = "#{rev.date.tv_sec} +0000"
 					log = rev.log.to_s
 
@@ -355,12 +373,17 @@ opts = GetoptLong.new(
 opts.ordering = GetoptLong::RETURN_IN_ORDER
 
 file_list = []
-parse_options = {}
+parse_options = {
+	:authors => Hash.new,
+}
 
 opts.each do |opt, arg|
 	case opt
 	when '--authors-file'
-		# TODO
+		authors = load_authors_file(arg)
+		redef = parse_options[:authors].keys & authors.keys
+		STDERR.puts "Authors file #{arg} redefines #{redef.join(', ')}" unless redef.empty?
+		parse_options[:authors].merge!(authors)
 	when '--rcs-suffixes'
 		# TODO
 	when '--tag-each-rev'
