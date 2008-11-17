@@ -393,6 +393,10 @@ parse_options = {
 	parse_options[:authors].merge! load_authors_file(fn.chomp)
 end
 
+parse_options[:tag_each_rev] = (
+	`git config --bool rcs.tageachrev`.chomp == 'true'
+) ? true : false
+
 opts.each do |opt, arg|
 	case opt
 	when '--authors-file'
