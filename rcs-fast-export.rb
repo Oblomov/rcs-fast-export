@@ -233,7 +233,7 @@ module RCS
 					raise "multiple diff_bases for #{branch}" unless rcs.revision[branch].diff_base.nil?
 					rcs.revision[branch].diff_base = rev
 					# we drop the last number from the branch name
-					rcs.revision[branch].branch = branch.sub(/\.\d+$/,'')
+					rcs.revision[branch].branch = branch.sub(/\.\d+$/,'.x')
 					rcs.revision[branch].branch_point = rev
 					status.pop if candidate.length > 1
 				when :revision_data
