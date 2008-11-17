@@ -109,6 +109,13 @@ module RCS
 					puts log unless log.empty?
 					puts "from :#{RCS.commit from}" if rev.branch_point
 					puts "M 644 :#{RCS.blob key} #{@fname}"
+
+					rev.symbols.each do |sym|
+						puts "reset refs/tags/#{sym}"
+						puts "from :#{RCS.commit key}"
+					end
+					# TODO option to tag every revision with its revision number
+
 					exported.push key
 				end
 				exported.each { |k| @revision.delete(k) }
@@ -118,7 +125,7 @@ module RCS
 
 	class Revision
 		attr_accessor :rev, :author, :date, :state, :next
-		attr_accessor :branches, :log, :text
+		attr_accessor :branches, :log, :text, :symbols
 		attr_accessor :branch, :diff_base, :branch_point
 		def initialize(rev)
 			@rev = rev
@@ -132,6 +139,7 @@ module RCS
 			@diff_base = nil
 			@log = []
 			@text = []
+			@symbols = []
 		end
 
 		def date=(str)
@@ -162,6 +170,8 @@ module RCS
 					case command
 					when 'head'
 						rcs.head = RCS.clean(args.chomp)
+					when 'symbols'
+						status.push :symbols
 					when 'comment'
 						rcs.comment = RCS.at_clean(args.chomp)
 					when /^[0-9.]+$/
@@ -178,6 +188,10 @@ module RCS
 					else
 						STDERR.puts "Skipping unhandled command #{command.inspect}"
 					end
+				when :symbols
+					sym, rev = line.strip.split(':',2);
+					status.pop if rev.chomp!(';')
+					rcs.revision[rev].symbols << sym
 				when :desc
 					rcs.desc.replace lines.dup
 					status.pop
