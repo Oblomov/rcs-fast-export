@@ -3,7 +3,17 @@
 require 'pp'
 
 def usage
-	STDERR.puts "#{$0} filename -- fast-export filename's RCS history"
+	STDERR.puts <<EOM
+#{$0} [options] file [file ...]
+
+Fast-export the RCS history of one or more file.
+
+Options:
+	--help, -h, -?		display this help text
+	--authors-file, -A	specify a file containing username = Full Name <email> mappings
+	--[no-]tag-each-rev	[do not] create a lightweight tag for each RCS revision
+
+EOM
 end
 
 def not_found(arg)
@@ -364,7 +374,8 @@ opts = GetoptLong.new(
 	['--rcs-suffixes', '-x', GetoptLong::REQUIRED_ARGUMENT],
 	# tag each revision?
 	['--tag-each-rev', GetoptLong::NO_ARGUMENT],
-	['--no-tag-each-rev', GetoptLong::NO_ARGUMENT]
+	['--no-tag-each-rev', GetoptLong::NO_ARGUMENT],
+	['--help', '-h', '-?', GetoptLong::NO_ARGUMENT]
 )
 
 # We read options in order, but they apply to all passed parameters.
@@ -394,6 +405,9 @@ opts.each do |opt, arg|
 		parse_options[:tag_each_rev] = false
 	when ''
 		file_list << arg
+	when '--help'
+		usage
+		exit
 	end
 end
 
