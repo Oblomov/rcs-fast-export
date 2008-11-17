@@ -406,6 +406,15 @@ SFX = ',v'
 
 status = 0
 
+# Read config options
+`git config --get-all rcs.authorsfile`.each_line do |fn|
+	authors = load_authors_file(fn.chomp)
+	# Add but don't overwrite
+	authors.each do |k, v|
+		parse_options[:authors][k] ||= v
+	end
+end
+
 file_list.each do |arg|
 	if arg[-2,2] == SFX
 		if File.exists? arg
