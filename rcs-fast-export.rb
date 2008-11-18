@@ -424,6 +424,52 @@ opts.each do |opt, arg|
 	end
 end
 
+require 'etc'
+
+user = Etc.getlogin || ENV['USER']
+
+# steal username/email data from other init files that may contain the
+# information
+def steal_username
+	[
+		# the user's .hgrc file for a username field
+		['~/.hgrc',   /^\s*username\s*=\s*(["'])?(.*)\1$/,       2],
+		# the user's .(g)vimrc for a changelog_username setting
+		['~/.vimrc',  /changelog_username\s*=\s*(["'])?(.*)\1$/, 2],
+		['~/.gvimrc', /changelog_username\s*=\s*(["'])?(.*)\1$/, 2],
+		[]
+	].each do |fn, rx, idx|
+		file = File.expand_path fn
+		if File.readable?(file) and File.read(file) =~ rx
+			parse_options[:authors][user] = Regexp.last_match(idx).strip
+			break
+		end
+	end
+end
+
+if user and not user.empty? and not parse_options[:authors].has_key?(user)
+	name = ENV['GIT_AUTHOR_NAME'] || ''
+	name.replace(`git config user.name`.chomp) if name.empty?
+	name.replace(Etc.getpwnam(user).gecos) if name.empty?
+
+	if name.empty?
+		# couldn't find a name, try to steal data from other sources
+		steal_username
+	else
+		# if we found a name, try to find an email too
+		email = ENV['GIT_AUTHOR_EMAIL'] || ''
+		email.replace(`git config user.email`.chomp) if email.empty?
+
+		if email.empty?
+			# couldn't find an email, try to steal data too
+			steal_username
+		else
+			# we got both a name and email, fill the info
+			parse_options[:authors][user] = "#{name} <#{email}>"
+		end
+	end
+end
+
 if file_list.empty?
 	usage
 	exit 1
