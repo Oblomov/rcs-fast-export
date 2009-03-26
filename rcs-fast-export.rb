@@ -364,6 +364,24 @@ module RCS
 				end
 			end
 		end
+
+		# clean up the symbols/branches: look for revisions that have
+		# one or more symbols but no dates, and make them into
+		# branches, pointing to the highest commit with that key
+		branches = []
+		keys = rcs.revision.keys
+		rcs.revision.each do |key, rev|
+			if rev.date.nil? and not rev.symbols.empty?
+				top = keys.select { |k| k.match(/^#{key}\./) }.sort.last
+				tr = rcs.revision[top]
+				raise "unhandled complex branch structure met: #{rev.inspect} refers #{tr.inspect}" if tr.date.nil?
+				tr.branches |= rev.symbols
+				branches << key
+			end
+		end
+		branches.each { |k| rcs.revision.delete k }
+
+		# export the commits
 		rcs.export_commits(opts)
 	end
 end
