@@ -142,6 +142,14 @@ module RCS
 					puts "from :#{RCS.commit from}" if rev.branch_point
 					puts "M 644 :#{RCS.blob key} #{@fname}"
 
+					# TODO FIXME this *should* be safe, in
+					# that it should not unduly move
+					# branches back in time, but I'm not
+					# 100% sure ...
+					rev.branches.each do |sym|
+						puts "reset refs/heads/#{sym}"
+						puts "from :#{RCS.commit key}"
+					end
 					rev.symbols.each do |sym|
 						puts "reset refs/tags/#{sym}"
 						puts "from :#{RCS.commit key}"
