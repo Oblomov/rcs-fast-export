@@ -360,8 +360,9 @@ module RCS
 						end
 					end
 
-					# remove empty lines
-					buffer.delete_if { |l| l.empty? }
+					# split lines with embedded newlines
+					# and remove empty lines
+					buffer.map! { |l| l.split($/) }.flatten!.delete_if { |l| l.empty? }
 
 					rcs.revision[rev].text = buffer
 					puts rcs.revision[rev].blob
