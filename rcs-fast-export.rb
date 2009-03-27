@@ -328,7 +328,7 @@ module RCS
 					end
 					# deep copy
 					buffer = []
-					rcs.revision[base].text.each { |l| buffer << l.dup }
+					rcs.revision[base].text.each { |l| buffer << [l.dup] }
 
 					adding = false
 					index = -1
@@ -344,14 +344,15 @@ module RCS
 
 						l.chomp!
 						raise 'malformed diff' unless l =~ /^([ad])(\d+) (\d+)$/
+						diff_cmd = $1.intern
 						index = $2.to_i-1
 						count = $3.to_i
-						case $1.intern
+						case diff_cmd
 						when :d
 							# we replace them with empty string so that 'a' commands
 							# referring to the same line work properly
 							while count > 0
-								buffer[index].replace ''
+								buffer[index].clear
 								index += 1
 								count -= 1
 							end
@@ -360,9 +361,9 @@ module RCS
 						end
 					end
 
-					# split lines with embedded newlines
-					# and remove empty lines
-					buffer.map! { |l| l.split($/) }.flatten!.delete_if { |l| l.empty? }
+					# turn the buffer into an array of lines, deleting the empty ones
+					buffer.delete_if { |l| l.empty? }
+					buffer.flatten!
 
 					rcs.revision[rev].text = buffer
 					puts rcs.revision[rev].blob
