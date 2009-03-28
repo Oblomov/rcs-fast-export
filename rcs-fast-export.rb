@@ -331,24 +331,33 @@ module RCS
 					rcs.revision[base].text.each { |l| buffer << [l.dup] }
 
 					adding = false
-					index = -1
-					count = -1
+					index = nil
+					count = nil
 
 					while l = difflines.shift
 						if adding
-							buffer[index] << l
+							raise 'negative index during insertion' if index < 0
+							raise 'negative count during insertion' if count < 0
+							adding << l
 							count -= 1
-							adding = false unless count > 0
+							# collected all the lines, put the before
+							unless count > 0
+								buffer[index].unshift *adding
+								adding = false
+							end
 							next
 						end
 
 						l.chomp!
 						raise 'malformed diff' unless l =~ /^([ad])(\d+) (\d+)$/
 						diff_cmd = $1.intern
-						index = $2.to_i-1
+						index = $2.to_i
 						count = $3.to_i
 						case diff_cmd
 						when :d
+							# for deletion, index 1 is the first index, so the Ruby
+							# index is one less than the diff one
+							index -= 1
 							# we replace them with empty string so that 'a' commands
 							# referring to the same line work properly
 							while count > 0
@@ -357,7 +366,10 @@ module RCS
 								count -= 1
 							end
 						when :a
-							adding = true
+							# addition will prepend the appropriate lines
+							# to the given index, and in this case Ruby
+							# and diff indices are the same
+							adding = []
 						end
 					end
 
