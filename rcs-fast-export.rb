@@ -2,6 +2,16 @@
 
 require 'pp'
 
+# Integer#odd? was introduced in Ruby 1.8.7, backport it to
+# older versions
+unless 2.respond_to? :odd?
+	class Integer
+		def odd?
+			self % 2 == 1
+		end
+	end
+end
+
 def usage
 	STDERR.puts <<EOM
 #{$0} [options] file [file ...]
