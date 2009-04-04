@@ -177,9 +177,10 @@ module RCS
 	end
 
 	class Revision
-		attr_accessor :rev, :author, :date, :state, :next
+		attr_accessor :rev, :author, :state, :next
 		attr_accessor :branches, :log, :text, :symbols
 		attr_accessor :branch, :diff_base, :branch_point
+		attr_reader   :date
 		def initialize(rev)
 			@rev = rev
 			@author = nil
@@ -352,7 +353,7 @@ module RCS
 							count -= 1
 							# collected all the lines, put the before
 							unless count > 0
-								buffer[index].unshift *adding
+								buffer[index].unshift(*adding)
 								adding = false
 							end
 							next
