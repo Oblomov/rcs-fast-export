@@ -16,7 +16,11 @@ def usage
 	STDERR.puts <<EOM
 #{$0} [options] file [file ...]
 
-Fast-export the RCS history of one or more file.
+Fast-export the RCS history of one or more files. If a directory is specified,
+all RCS-tracked files in the directory and its descendants are exported.
+
+When importing single files, their pathname is discarded during import. When
+importing directories, only the specified directory component is discarded.
 
 Options:
 	--help, -h, -?		display this help text
@@ -550,27 +554,42 @@ SFX = ',v'
 status = 0
 
 file_list.each do |arg|
-	if arg[-2,2] == SFX
-		if File.exists? arg
-			rcsfile = arg.dup
+	case ftype = File.ftype(arg)
+	when 'file'
+		if arg[-2,2] == SFX
+			if File.exists? arg
+				rcsfile = arg.dup
+			else
+				not_found "RCS file #{arg}"
+				status |= 1
+			end
+			filename = File.basename(arg, SFX)
 		else
-			not_found "RCS file #{arg}"
-			status |= 1
-		end
-		filename = File.basename(arg, SFX)
-	else
-		filename = File.basename(arg)
-		path = File.dirname(arg)
-		rcsfile = File.join(path, 'RCS', filename) + SFX
-		unless File.exists? rcsfile
-			rcsfile.replace File.join(path, filename) + SFX
+			filename = File.basename(arg)
+			path = File.dirname(arg)
+			rcsfile = File.join(path, 'RCS', filename) + SFX
 			unless File.exists? rcsfile
-				not_found "RCS file for #{filename} in #{path}"
+				rcsfile.replace File.join(path, filename) + SFX
+				unless File.exists? rcsfile
+					not_found "RCS file for #{filename} in #{path}"
+				end
 			end
 		end
+		RCS.parse(filename, rcsfile, parse_options)
+	when 'directory'
+		pattern = File.join(arg, '**', '*' + SFX)
+		Dir.glob(pattern).each do |rcsfile|
+			filename = File.basename(rcsfile, SFX)
+			path = File.dirname(rcsfile)
+			path.sub!(/\/?RCS$/, '') # strip final /RCS if present
+			path.sub!(/^#{Regexp.escape arg}\/?/, '') # strip initial dirname
+			filename = File.join(path, filename) unless path.empty?
+			RCS.parse(filename, rcsfile, parse_options)
+		end
+	else
+		STDERR.puts "Cannot handle #{arg} of #{ftype} type"
+		status |= 1
 	end
-
-	RCS.parse(filename, rcsfile, parse_options)
 end
 
 exit status
