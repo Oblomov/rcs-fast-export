@@ -22,10 +22,12 @@ Options:
 	--help, -h, -?		display this help text
 	--authors-file, -A	specify a file containing username = Full Name <email> mappings
 	--[no-]tag-each-rev	[do not] create a lightweight tag for each RCS revision
+	--[no-]log-filename	[do not] prepend the filename to the commit log
 
 Config options:
 	rcs.authorsFile		for --authors-file
 	rcs.tagEachRev		for --tag-each-rev
+	rcs.logFilename		for --log-filename
 
 EOM
 end
@@ -142,7 +144,11 @@ module RCS
 					branch = rev.branch || 'master'
 					author = opts[:authors][rev.author] || "#{rev.author} <empty>"
 					date = "#{rev.date.tv_sec} +0000"
-					log = rev.log.to_s
+					log = String.new
+					if opts[:log_filename]
+						log << @fname << ": "
+					end
+					log << rev.log.to_s
 
 					puts "commit refs/heads/#{branch}"
 					puts "mark :#{RCS.commit key}"
@@ -430,6 +436,9 @@ opts = GetoptLong.new(
 	# tag each revision?
 	['--tag-each-rev', GetoptLong::NO_ARGUMENT],
 	['--no-tag-each-rev', GetoptLong::NO_ARGUMENT],
+	# prepend filenames to commit logs?
+	['--log-filename', GetoptLong::NO_ARGUMENT],
+	['--no-log-filename', GetoptLong::NO_ARGUMENT],
 	['--help', '-h', '-?', GetoptLong::NO_ARGUMENT]
 )
 
@@ -452,6 +461,10 @@ parse_options[:tag_each_rev] = (
 	`git config --bool rcs.tageachrev`.chomp == 'true'
 ) ? true : false
 
+parse_options[:log_filename] = (
+	`git config --bool rcs.logfilename`.chomp == 'true'
+) ? true : false
+
 opts.each do |opt, arg|
 	case opt
 	when '--authors-file'
@@ -467,6 +480,12 @@ opts.each do |opt, arg|
 		# this is the default, which is fine since the missing key
 		# (default) returns nil which is false in Ruby
 		parse_options[:tag_each_rev] = false
+	when '--log-filename'
+		parse_options[:log_filename] = true
+	when '--no-log-filename'
+		# this is the default, which is fine since the missing key
+		# (default) returns nil which is false in Ruby
+		parse_options[:log_filename] = false
 	when ''
 		file_list << arg
 	when '--help'
