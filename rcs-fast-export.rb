@@ -2,7 +2,6 @@
 
 =begin
 TODO
-	* File modes: check if the RCS file is executable, and use 755 as file mode instead of 644
 	* Option to coalesce commits that only differ by having a symbol or not
 	* Further coalescing options? (e.g. small logfile differences)
 	* Proper branching support in multi-file export
@@ -135,13 +134,14 @@ module RCS
 	end
 
 	class File
-		attr_accessor :head, :comment, :desc, :revision, :fname
-		def initialize(fname)
+		attr_accessor :head, :comment, :desc, :revision, :fname, :mode
+		def initialize(fname, executable)
 			@fname = fname.dup
 			@head = nil
 			@comment = nil
 			@desc = []
 			@revision = Hash.new { |h, r| h[r] = Revision.new(self, r) }
+			@mode = executable ? '755' : '644'
 		end
 
 		def has_revision?(rev)
@@ -191,7 +191,7 @@ module RCS
 					puts "data #{log.length}"
 					puts log unless log.empty?
 					puts "from :#{RCS.commit from}" if rev.branch_point
-					puts "M 644 :#{RCS.blob @fname, key} #{@fname}"
+					puts "M #{@mode} :#{RCS.blob @fname, key} #{@fname}"
 
 					# TODO FIXME this *should* be safe, in
 					# that it should not unduly move
@@ -250,7 +250,7 @@ module RCS
 	end
 
 	def RCS.parse(fname, rcsfile)
-		rcs = RCS::File.new(fname)
+		rcs = RCS::File.new(fname, ::File.executable?(rcsfile))
 
 		::File.open(rcsfile, 'r') do |file|
 			status = [:basic]
@@ -505,7 +505,7 @@ module RCS
 		def to_a
 			files = []
 			@files.map do |rcs, rev|
-				files << "M 644 :#{RCS.blob rcs.fname, rev.rev} #{rcs.fname}"
+				files << "M #{rcs.mode} :#{RCS.blob rcs.fname, rev.rev} #{rcs.fname}"
 			end
 			files
 		end
