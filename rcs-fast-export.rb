@@ -231,11 +231,18 @@ module RCS
 					command, args = line.split($;,2)
 					next if command.empty?
 
+					if command.chomp!(';')
+						STDERR.puts "Skipping empty command #{command.inspect}" if $DEBUG
+						next
+					end
+
 					case command
 					when 'head'
 						rcs.head = RCS.clean(args.chomp)
 					when 'symbols'
 						status.push :symbols
+						next if args.empty?
+						line = args; redo
 					when 'comment'
 						rcs.comment = RCS.at_clean(args.chomp)
 					when /^[0-9.]+$/
@@ -249,13 +256,23 @@ module RCS
 						status.push :desc
 						lines.clear
 						status.push :read_lines
+					when 'branch', 'access', 'locks'
+						STDERR.puts "Skipping unhandled command #{command.inspect}" if $DEBUG
 					else
-						STDERR.puts "Skipping unhandled command #{command.inspect}"
+						raise "Unknown command #{command.inspect}"
 					end
 				when :symbols
-					sym, rev = line.strip.split(':',2);
-					status.pop if rev.chomp!(';')
-					rcs.revision[rev].symbols << sym
+					# we can have multiple symbols per line
+					pairs = line.strip.split($;)
+					pairs.each do |pair|
+						sym, rev = pair.strip.split(':',2);
+						if rev
+							status.pop if rev.chomp!(';')
+							rcs.revision[rev].symbols << sym
+						else
+							status.pop
+						end
+					end
 				when :desc
 					rcs.desc.replace lines.dup
 					status.pop
@@ -287,13 +304,13 @@ module RCS
 					end
 				when :new_revision
 					case line.chomp
-					when /^date\s+(\S+);\s+author\s+(\S+);\sstate\s(\S+);$/
+					when /^date\s+(\S+);\s+author\s+(\S+);\s+state\s+(\S+);$/
 						rcs.revision[rev].date = $1
 						rcs.revision[rev].author = $2
 						rcs.revision[rev].state = $3
 					when 'branches'
 						status.push :branches
-					when 'branches;'
+					when /branches\s*;/
 						next
 					when /^next\s+(\S+)?;$/
 						nxt = rcs.revision[rev].next = $1
@@ -402,8 +419,7 @@ module RCS
 					puts rcs.revision[rev].blob
 					status.pop
 				else
-					STDERR.puts "Unknown status #{status.last}"
-					exit 1
+					raise "Unknown status #{status.last}"
 				end
 			end
 		end
@@ -584,7 +600,12 @@ file_list.each do |arg|
 			path.sub!(/\/?RCS$/, '') # strip final /RCS if present
 			path.sub!(/^#{Regexp.escape arg}\/?/, '') # strip initial dirname
 			filename = File.join(path, filename) unless path.empty?
-			RCS.parse(filename, rcsfile, parse_options)
+			begin
+				RCS.parse(filename, rcsfile, parse_options)
+			rescue Exception => e
+				STDERR.puts "Failed to parse #{filename} @ #{rcsfile}:#{$.}"
+				raise e
+			end
 		end
 	else
 		STDERR.puts "Cannot handle #{arg} of #{ftype} type"
