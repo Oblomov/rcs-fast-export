@@ -1,5 +1,14 @@
 #!/usr/bin/ruby
 
+=begin
+TODO
+	* File modes: check if the RCS file is executable, and use 755 as file mode instead of 644
+	* Option to coalesce commits that only differ by having a symbol or not
+	* Further coalescing options? (e.g. small logfile differences)
+	* Proper branching support in multi-file export
+	* Optimize memory usage by discarding unneeded text
+=end
+
 require 'pp'
 
 # Integer#odd? was introduced in Ruby 1.8.7, backport it to
@@ -22,16 +31,29 @@ all RCS-tracked files in the directory and its descendants are exported.
 When importing single files, their pathname is discarded during import. When
 importing directories, only the specified directory component is discarded.
 
+When importing a single file, RCS commits are converted one by one. Otherwise,
+some heuristics is used to determine how to coalesce commits of different.
+
+Currently, commits are coalesced if they share the exact same log and symbols,
+and if their date differs by no more than a the user-specified fuzziness.
+
 Options:
 	--help, -h, -?		display this help text
 	--authors-file, -A	specify a file containing username = Full Name <email> mappings
-	--[no-]tag-each-rev	[do not] create a lightweight tag for each RCS revision
-	--[no-]log-filename	[do not] prepend the filename to the commit log
+	--rcs-commit-fuzz	fuzziness in RCS commits to be considered a single one when
+				importing multiple files
+				(in seconds, defaults to 300, i.e. 5 minutes)
+	--[no-]tag-each-rev	[do not] create a lightweight tag for each RCS revision when
+				importing a single file
+	--[no-]log-filename	[do not] prepend the filename to the commit log when importing
+				a single file
 
 Config options:
 	rcs.authorsFile		for --authors-file
 	rcs.tagEachRev		for --tag-each-rev
 	rcs.logFilename		for --log-filename
+	rcs.commitFuzz		for --rcs-commit-fuzz
+	rcs.tagFuzz		for --rcs-tag-fuzz
 
 EOM
 end
@@ -95,22 +117,31 @@ module RCS
 		RCS.sanitize RCS.clean(arg)
 	end
 
-	def RCS.blob(arg)
-		arg.gsub('.', '0') + ('90'*5)
+	def RCS.mark(key)
+		@@marks ||= {}
+		if @@marks.key? key
+			@@marks[key]
+		else
+			@@marks[key] = @@marks.length + 1
+		end
 	end
 
-	def RCS.commit(arg)
-		arg.gsub('.', '0') + ('09'*5)
+	def RCS.blob(file, rev)
+		RCS.mark([file, rev])
+	end
+
+	def RCS.commit(commit)
+		RCS.mark(commit)
 	end
 
 	class File
-		attr_accessor :head, :comment, :desc, :revision
+		attr_accessor :head, :comment, :desc, :revision, :fname
 		def initialize(fname)
 			@fname = fname.dup
 			@head = nil
 			@comment = nil
 			@desc = []
-			@revision = Hash.new { |h, r| h[r] = Revision.new(r) }
+			@revision = Hash.new { |h, r| h[r] = Revision.new(self, r) }
 		end
 
 		def has_revision?(rev)
@@ -160,7 +191,7 @@ module RCS
 					puts "data #{log.length}"
 					puts log unless log.empty?
 					puts "from :#{RCS.commit from}" if rev.branch_point
-					puts "M 644 :#{RCS.blob key} #{@fname}"
+					puts "M 644 :#{RCS.blob @fname, key} #{@fname}"
 
 					# TODO FIXME this *should* be safe, in
 					# that it should not unduly move
@@ -191,7 +222,8 @@ module RCS
 		attr_accessor :branches, :log, :text, :symbols
 		attr_accessor :branch, :diff_base, :branch_point
 		attr_reader   :date
-		def initialize(rev)
+		def initialize(file, rev)
+			@file = file
 			@rev = rev
 			@author = nil
 			@date = nil
@@ -212,12 +244,12 @@ module RCS
 
 		def blob
 			str = @text.join('')
-			ret = "blob\nmark :#{RCS.blob @rev}\ndata #{str.length}\n#{str}\n"
+			ret = "blob\nmark :#{RCS.blob @file.fname, @rev}\ndata #{str.length}\n#{str}\n"
 			ret
 		end
 	end
 
-	def RCS.parse(fname, rcsfile, opts={})
+	def RCS.parse(fname, rcsfile)
 		rcs = RCS::File.new(fname)
 
 		::File.open(rcsfile, 'r') do |file|
@@ -440,8 +472,123 @@ module RCS
 		end
 		branches.each { |k| rcs.revision.delete k }
 
-		# export the commits
-		rcs.export_commits(opts)
+		return rcs
+	end
+
+	class Tree
+		def initialize(commit)
+			@commit = commit
+			@files = Hash.new
+		end
+
+		def add(rcs, rev)
+			if @files.key? rcs
+				prev = @files[rcs]
+				if prev.log == rev.log
+					str = "re-adding existing file #{rcs.fname} (old: #{prev.rev}, new: #{rev.rev})"
+				else
+					str = "re-adding existing file #{rcs.fname} (old: #{[prev.rev, prev.log.to_s].inspect}, new: #{[rev.rev, rev.log.to_s].inspect})"
+				end
+				if prev.text != rev.text
+					raise str
+				else
+					@commit.warn_about str
+				end
+			end
+			@files[rcs] = rev
+		end
+
+		def each &block
+			@files.each &block
+		end
+
+		def to_a
+			files = []
+			@files.map do |rcs, rev|
+				files << "M 644 :#{RCS.blob rcs.fname, rev.rev} #{rcs.fname}"
+			end
+			files
+		end
+
+		def to_s
+			self.to_a.join("\n")
+		end
+	end
+
+	class Commit
+		attr_accessor :date, :log, :symbols, :author, :branch
+		attr_accessor :tree
+		def initialize(rcs, rev)
+			raise NotImplementedError if rev.branch
+			self.date = rev.date.dup
+			self.log = rev.log.dup
+			self.symbols = rev.symbols.dup
+			self.author = rev.author
+			self.branch = rev.branch
+
+			self.tree = Tree.new self
+			self.tree.add rcs, rev
+		end
+
+		def to_a
+			[self.date, self.branch, self.symbols, self.author, self.log, self.tree.to_a]
+		end
+
+		def warn_about(str)
+			warn str + " for commit on #{self.date}"
+		end
+
+		# Sort by date and then by number of symbols
+		def <=>(other)
+			ds = self.date <=> other.date
+			if ds != 0
+				return ds
+			else
+				return self.symbols.length <=> other.symbols.length
+			end
+		end
+
+		def merge!(commit)
+			commit.tree.each do |rcs, rev|
+				self.tree.add rcs, rev
+			end
+			if commit.date > self.date
+				warn_about "updating date to #{commit.date}"
+				self.date = commit.date
+			end
+			# TODO this is a possible option when merging commits with differing symbols
+			# self.symbols |= commit.symbols
+		end
+
+		def export(opts={})
+			xbranch = self.branch || 'master'
+			xauthor = opts[:authors][self.author] || "#{self.author} <empty>"
+			xlog = self.log.to_s
+			numdate = self.date.tv_sec
+			xdate = "#{numdate} +0000"
+			key = numdate.to_s
+
+			puts "commit refs/heads/#{xbranch}"
+			puts "mark :#{RCS.commit key}"
+			puts "committer #{xauthor} #{xdate}"
+			puts "data #{xlog.length}"
+			puts xlog unless xlog.empty?
+			# TODO branching support for multi-file export
+			# puts "from :#{RCS.commit from}" if self.branch_point
+			puts self.tree.to_s
+
+			# TODO branching support for multi-file export
+			# rev.branches.each do |sym|
+			# 	puts "reset refs/heads/#{sym}"
+			# 	puts "from :#{RCS.commit key}"
+			# end
+
+			self.symbols.each do |sym|
+				puts "reset refs/tags/#{sym}"
+				puts "from :#{RCS.commit key}"
+			end
+
+		end
 	end
 end
 
@@ -453,6 +600,8 @@ opts = GetoptLong.new(
 	['--authors-file', '-A', GetoptLong::REQUIRED_ARGUMENT],
 	# RCS file suffix, like RCS
 	['--rcs-suffixes', '-x', GetoptLong::REQUIRED_ARGUMENT],
+	# Date fuzziness for commits to be considered the same (in seconds)
+	['--rcs-commit-fuzz', GetoptLong::REQUIRED_ARGUMENT],
 	# tag each revision?
 	['--tag-each-rev', GetoptLong::NO_ARGUMENT],
 	['--no-tag-each-rev', GetoptLong::NO_ARGUMENT],
@@ -470,6 +619,8 @@ opts.ordering = GetoptLong::RETURN_IN_ORDER
 file_list = []
 parse_options = {
 	:authors => Hash.new,
+	:commit_fuzz => 300,
+	:tag_fuzz => -1,
 }
 
 # Read config options
@@ -485,6 +636,12 @@ parse_options[:log_filename] = (
 	`git config --bool rcs.logfilename`.chomp == 'true'
 ) ? true : false
 
+fuzz = `git config --int rcs.commitFuzz`.chomp
+parse_options[:commit_fuzz] = fuzz.to_i unless fuzz.empty?
+
+fuzz = `git config --int rcs.tagFuzz`.chomp
+parse_options[:tag_fuzz] = fuzz.to_i unless fuzz.empty?
+
 opts.each do |opt, arg|
 	case opt
 	when '--authors-file'
@@ -494,6 +651,10 @@ opts.each do |opt, arg|
 		parse_options[:authors].merge!(authors)
 	when '--rcs-suffixes'
 		# TODO
+	when '--rcs-commit-fuzz'
+		parse_options[:commit_fuzz] = arg.to_i
+	when '--rcs-tag-fuzz'
+		parse_options[:tag_fuzz] = arg.to_i
 	when '--tag-each-rev'
 		parse_options[:tag_each_rev] = true
 	when '--no-tag-each-rev'
@@ -512,6 +673,10 @@ opts.each do |opt, arg|
 		usage
 		exit
 	end
+end
+
+if parse_options[:tag_fuzz] < parse_options[:commit_fuzz]
+	parse_options[:tag_fuzz] = parse_options[:commit_fuzz]
 end
 
 require 'etc'
@@ -569,6 +734,7 @@ SFX = ',v'
 
 status = 0
 
+rcs = []
 file_list.each do |arg|
 	case ftype = File.ftype(arg)
 	when 'file'
@@ -591,7 +757,7 @@ file_list.each do |arg|
 				end
 			end
 		end
-		RCS.parse(filename, rcsfile, parse_options)
+		rcs << RCS.parse(filename, rcsfile)
 	when 'directory'
 		pattern = File.join(arg, '**', '*' + SFX)
 		Dir.glob(pattern).each do |rcsfile|
@@ -601,7 +767,7 @@ file_list.each do |arg|
 			path.sub!(/^#{Regexp.escape arg}\/?/, '') # strip initial dirname
 			filename = File.join(path, filename) unless path.empty?
 			begin
-				RCS.parse(filename, rcsfile, parse_options)
+				rcs << RCS.parse(filename, rcsfile)
 			rescue Exception => e
 				STDERR.puts "Failed to parse #{filename} @ #{rcsfile}:#{$.}"
 				raise e
@@ -611,6 +777,58 @@ file_list.each do |arg|
 		STDERR.puts "Cannot handle #{arg} of #{ftype} type"
 		status |= 1
 	end
+end
+
+if rcs.length == 1
+	rcs.first.export_commits(parse_options)
+else
+	STDERR.puts "Preparing commits"
+
+	commits = []
+
+	rcs.each do |r|
+		r.revision.each do |k, rev|
+			commits << RCS::Commit.new(r, rev)
+		end
+	end
+
+	STDERR.puts "Sorting by date"
+
+	commits.sort!
+
+	if $DEBUG
+		STDERR.puts "RAW commits (#{commits.length}):"
+		commits.each do |c|
+			PP.pp c.to_a, $stderr
+		end
+	else
+		STDERR.puts "#{commits.length} single-file commits"
+	end
+
+	STDERR.puts "Coalescing [1] by date fuzz"
+
+	commits.reverse_each do |c|
+		commits.reverse_each do |k|
+			break if k.date < c.date - parse_options[:commit_fuzz]
+			next if k == c
+			next if c.log != k.log or c.symbols != k.symbols or c.author != k.author or c.branch != k.branch
+			next if k.date > c.date
+			c.merge! k
+			commits.delete k
+		end
+	end
+
+	if $DEBUG
+		STDERR.puts "[1] commits (#{commits.length}):"
+		commits.each do |c|
+			PP.pp c.to_a, $stderr
+		end
+	else
+		STDERR.puts "#{commits.length} coalesced commits"
+	end
+
+	commits.each { |c| c.export(parse_options) }
+
 end
 
 exit status
