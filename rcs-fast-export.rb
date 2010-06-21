@@ -288,7 +288,7 @@ module RCS
 						status.push :desc
 						lines.clear
 						status.push :read_lines
-					when 'branch', 'access', 'locks'
+					when 'branch', 'access', 'locks', 'expand'
 						STDERR.puts "Skipping unhandled command #{command.inspect}" if $DEBUG
 					else
 						raise "Unknown command #{command.inspect}"
