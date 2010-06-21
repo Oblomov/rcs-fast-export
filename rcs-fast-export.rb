@@ -412,6 +412,9 @@ module RCS
 							count -= 1
 							# collected all the lines, put the before
 							unless count > 0
+								unless buffer[index]
+									buffer[index] = []
+								end
 								buffer[index].unshift(*adding)
 								adding = false
 							end
