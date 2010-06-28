@@ -290,9 +290,14 @@ module RCS
 						status.push :read_lines
 					when 'branch', 'access', 'locks', 'expand'
 						STDERR.puts "Skipping unhandled command #{command.inspect}" if $DEBUG
+						status.push :skipping_lines
+						next if args.empty?
+						line = args; redo
 					else
 						raise "Unknown command #{command.inspect}"
 					end
+				when :skipping_lines
+					status.pop if line.strip.chomp!(';')
 				when :symbols
 					# we can have multiple symbols per line
 					pairs = line.strip.split($;)
