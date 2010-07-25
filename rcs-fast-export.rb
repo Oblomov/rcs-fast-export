@@ -819,7 +819,7 @@ else
 		STDERR.puts "#{commits.length} single-file commits"
 	end
 
-	STDERR.puts "Coalescing [1] by date fuzz"
+	STDERR.puts "Coalescing [1] by date with fuzz #{parse_options[:commit_fuzz]}"
 
 	commits.reverse_each do |c|
 		commits.reverse_each do |k|
@@ -827,7 +827,14 @@ else
 			next if k == c
 			next if c.log != k.log or c.symbols != k.symbols or c.author != k.author or c.branch != k.branch
 			next if k.date > c.date
-			c.merge! k
+			begin
+				c.merge! k
+			rescue RuntimeError => err
+				fuzz = c.date - k.date
+				STDERR.puts "Fuzzy commit coalescing failed: #{err}"
+				STDERR.puts "\tretry with commit fuzz < #{fuzz} if you don't want to see this message"
+				break
+			end
 			commits.delete k
 		end
 	end
