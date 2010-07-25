@@ -489,9 +489,17 @@ module RCS
 			@files = Hash.new
 		end
 
-		def add(rcs, rev)
-			if @files.key? rcs
-				prev = @files[rcs]
+		def merge!(tree)
+			testfiles = @files.dup
+			tree.each { |rcs, rev| self.add(rcs, rev, testfiles) }
+			# the next line is only reached if all the adds were
+			# succesfull, so the merge is atomic
+			@files.replace testfiles
+		end
+
+		def add(rcs, rev, file_list=@files)
+			if file_list.key? rcs
+				prev = file_list[rcs]
 				if prev.log == rev.log
 					str = "re-adding existing file #{rcs.fname} (old: #{prev.rev}, new: #{rev.rev})"
 				else
@@ -503,7 +511,7 @@ module RCS
 					@commit.warn_about str
 				end
 			end
-			@files[rcs] = rev
+			file_list[rcs] = rev
 		end
 
 		def each &block
@@ -557,9 +565,7 @@ module RCS
 		end
 
 		def merge!(commit)
-			commit.tree.each do |rcs, rev|
-				self.tree.add rcs, rev
-			end
+			self.tree.merge! commit.tree
 			if commit.date > self.date
 				warn_about "updating date to #{commit.date}"
 				self.date = commit.date
