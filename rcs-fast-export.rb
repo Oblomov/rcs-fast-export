@@ -34,7 +34,10 @@ When importing a single file, RCS commits are converted one by one. Otherwise,
 some heuristics is used to determine how to coalesce commits of different.
 
 Currently, commits are coalesced if they share the exact same log and symbols,
-and if their date differs by no more than a the user-specified fuzziness.
+and if their date differs by no more than the user-specified fuzziness.
+
+Typical usage:
+    git init && rcs-fast-export.rb . | git fast-import && git reset --hard
 
 Options:
 	--help, -h, -?		display this help text
@@ -493,7 +496,7 @@ module RCS
 			testfiles = @files.dup
 			tree.each { |rcs, rev| self.add(rcs, rev, testfiles) }
 			# the next line is only reached if all the adds were
-			# succesfull, so the merge is atomic
+			# successful, so the merge is atomic
 			@files.replace testfiles
 		end
 
