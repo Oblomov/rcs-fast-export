@@ -2,7 +2,6 @@
 
 =begin
 TODO
-	* Option to coalesce commits that only differ by having a symbol or not
 	* Further coalescing options? (e.g. small logfile differences)
 	* Proper branching support in multi-file export
 	* Optimize memory usage by discarding unneeded text
@@ -35,7 +34,9 @@ some heuristics is used to determine how to coalesce commits touching different
 files.
 
 Currently, commits are coalesced if they share the exact same log and symbols,
-and if their date differs by no more than the user-specified fuzziness.
+and if their date differs by no more than the user-specified fuzziness. The
+symbol check can be disabled by specifying --no-symbol-check or by setting
+rcs.symbolCheck to false in the git configuration.
 
 Typical usage:
     git init && rcs-fast-export.rb . | git fast-import && git reset --hard
@@ -46,6 +47,7 @@ Options:
 	--rcs-commit-fuzz	fuzziness in RCS commits to be considered a single one when
 				importing multiple files
 				(in seconds, defaults to 300, i.e. 5 minutes)
+	--[no-]symbol-check	[do not] check symbols when coalescing commits
 	--[no-]tag-each-rev	[do not] create a lightweight tag for each RCS revision when
 				importing a single file
 	--[no-]log-filename	[do not] prepend the filename to the commit log when importing
@@ -56,6 +58,7 @@ Config options:
 	rcs.tagEachRev		for --tag-each-rev
 	rcs.logFilename		for --log-filename
 	rcs.commitFuzz		for --rcs-commit-fuzz
+	rcs.symbolCheck		for --rcs-symbol-check
 	rcs.tagFuzz		for --rcs-tag-fuzz
 
 EOM
@@ -530,6 +533,10 @@ module RCS
 			files
 		end
 
+		def filenames
+			@files.map { |rcs, rev| rcs.fname }
+		end
+
 		def to_s
 			self.to_a.join("\n")
 		end
@@ -574,8 +581,12 @@ module RCS
 				warn_about "updating date to #{commit.date}"
 				self.date = commit.date
 			end
-			# TODO this is a possible option when merging commits with differing symbols
-			# self.symbols |= commit.symbols
+			# This is only relevant if symbol checking is disabled
+			# TODO maybe we need an option to only allow merging when
+			# one of the symbol list is contained within the other?
+			# (e.g. don't allow ["1.7"] merged with ["1.5"] but allow
+			# ["1.5", "1.7"] merged with either)
+			self.symbols |= commit.symbols
 		end
 
 		def export(opts={})
@@ -620,6 +631,9 @@ opts = GetoptLong.new(
 	['--rcs-suffixes', '-x', GetoptLong::REQUIRED_ARGUMENT],
 	# Date fuzziness for commits to be considered the same (in seconds)
 	['--rcs-commit-fuzz', GetoptLong::REQUIRED_ARGUMENT],
+	# check symbols when coalescing?
+	['--symbol-check', GetoptLong::NO_ARGUMENT],
+	['--no-symbol-check', GetoptLong::NO_ARGUMENT],
 	# tag each revision?
 	['--tag-each-rev', GetoptLong::NO_ARGUMENT],
 	['--no-tag-each-rev', GetoptLong::NO_ARGUMENT],
@@ -660,6 +674,10 @@ parse_options[:commit_fuzz] = fuzz.to_i unless fuzz.empty?
 fuzz = `git config --int rcs.tagFuzz`.chomp
 parse_options[:tag_fuzz] = fuzz.to_i unless fuzz.empty?
 
+parse_options[:symbol_check] = (
+	`git config --bool rcs.symbolcheck`.chomp == 'false'
+) ? false : true
+
 opts.each do |opt, arg|
 	case opt
 	when '--authors-file'
@@ -673,6 +691,10 @@ opts.each do |opt, arg|
 		parse_options[:commit_fuzz] = arg.to_i
 	when '--rcs-tag-fuzz'
 		parse_options[:tag_fuzz] = arg.to_i
+	when '--symbol-check'
+		parse_options[:symbol_check] = true
+	when '--no-symbol-check'
+		parse_options[:symbol_check] = false
 	when '--tag-each-rev'
 		parse_options[:tag_each_rev] = true
 	when '--no-tag-each-rev'
@@ -829,8 +851,19 @@ else
 		commits.reverse_each do |k|
 			break if k.date < c.date - parse_options[:commit_fuzz]
 			next if k == c
-			next if c.log != k.log or c.symbols != k.symbols or c.author != k.author or c.branch != k.branch
+			next if c.log != k.log or c.author != k.author or c.branch != k.branch
 			next if k.date > c.date
+			if c.symbols != k.symbols
+				if parse_options[:symbol_check]
+					STDERR.puts "Not coalescing #{c.log.inspect} for (#{c.tree.filenames.join(', ')}) and (#{k.tree.filenames.join(', ')})"
+					STDERR.puts "\tbecause symbols differ (#{c.symbols.inspect} vs #{k.symbols.inspect})"
+					STDERR.puts "\tretry with the --no-symbol-check option if you want to merge these commits anyway"
+					next
+				elsif $DEBUG
+					STDERR.puts "Coalescing #{c.log.inspect} for (#{c.tree.filenames.join(', ')}) and (#{k.tree.filenames.join(', ')})"
+					STDERR.puts "\twith different symbols (#{c.symbols.inspect} vs #{k.symbols.inspect})"
+				end
+			end
 			begin
 				c.merge! k
 			rescue RuntimeError => err
