@@ -31,7 +31,8 @@ When importing single files, their pathname is discarded during import. When
 importing directories, only the specified directory component is discarded.
 
 When importing a single file, RCS commits are converted one by one. Otherwise,
-some heuristics is used to determine how to coalesce commits of different.
+some heuristics is used to determine how to coalesce commits touching different
+files.
 
 Currently, commits are coalesced if they share the exact same log and symbols,
 and if their date differs by no more than the user-specified fuzziness.
