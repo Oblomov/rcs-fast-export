@@ -2,12 +2,15 @@
 
 =begin
 TODO
+	* Refactor commit coalescing
+	* Add --strict-symbol-check to only coalesce commits if their symbol lists are equal
 	* Further coalescing options? (e.g. small logfile differences)
 	* Proper branching support in multi-file export
 	* Optimize memory usage by discarding unneeded text
 =end
 
 require 'pp'
+require 'set'
 
 # Integer#odd? was introduced in Ruby 1.8.7, backport it to
 # older versions
@@ -33,10 +36,11 @@ When importing a single file, RCS commits are converted one by one. Otherwise,
 some heuristics is used to determine how to coalesce commits touching different
 files.
 
-Currently, commits are coalesced if they share the exact same log and symbols,
-and if their date differs by no more than the user-specified fuzziness. The
-symbol check can be disabled by specifying --no-symbol-check or by setting
-rcs.symbolCheck to false in the git configuration.
+Currently, commits are coalesced if they share the exact same log and if their
+date differs by no more than the user-specified fuzziness. Additionally, the
+symbols in one of the commit must be a subset of the symbols in the other
+commit, unless --no-symbol-check is specified or rcs.symbolCheck is set to
+false in the git configuration.
 
 Typical usage:
     git init && rcs-fast-export.rb . | git fast-import && git reset --hard
@@ -242,7 +246,7 @@ module RCS
 			@diff_base = nil
 			@log = []
 			@text = []
-			@symbols = []
+			@symbols = Set.new
 		end
 
 		def date=(str)
@@ -581,12 +585,7 @@ module RCS
 				warn_about "updating date to #{commit.date}"
 				self.date = commit.date
 			end
-			# This is only relevant if symbol checking is disabled
-			# TODO maybe we need an option to only allow merging when
-			# one of the symbol list is contained within the other?
-			# (e.g. don't allow ["1.7"] merged with ["1.5"] but allow
-			# ["1.5", "1.7"] merged with either)
-			self.symbols |= commit.symbols
+			self.symbols.merge commit.symbols
 		end
 
 		def export(opts={})
@@ -853,15 +852,15 @@ else
 			next if k == c
 			next if c.log != k.log or c.author != k.author or c.branch != k.branch
 			next if k.date > c.date
-			if c.symbols != k.symbols
+			unless c.symbols.subset?(k.symbols) or k.symbols.subset?(c.symbols)
 				if parse_options[:symbol_check]
-					STDERR.puts "Not coalescing #{c.log.inspect} for (#{c.tree.filenames.join(', ')}) and (#{k.tree.filenames.join(', ')})"
-					STDERR.puts "\tbecause symbols differ (#{c.symbols.inspect} vs #{k.symbols.inspect})"
+					STDERR.puts "Not coalescing #{c.log.inspect}\n\tfor (#{c.tree.filenames.join(', ')})\n\tand (#{k.tree.filenames.join(', ')})"
+					STDERR.puts "\tbecause their symbols disagree:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
 					STDERR.puts "\tretry with the --no-symbol-check option if you want to merge these commits anyway"
 					next
 				elsif $DEBUG
-					STDERR.puts "Coalescing #{c.log.inspect} for (#{c.tree.filenames.join(', ')}) and (#{k.tree.filenames.join(', ')})"
-					STDERR.puts "\twith different symbols (#{c.symbols.inspect} vs #{k.symbols.inspect})"
+					STDERR.puts "Coalescing #{c.log.inspect}\n\tfor (#{c.tree.filenames.join(', ')})\n\tand (#{k.tree.filenames.join(', ')})"
+					STDERR.puts "\twith disagreeing symbols:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
 				end
 			end
 			begin
