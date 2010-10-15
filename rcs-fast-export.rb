@@ -43,7 +43,7 @@ commit, unless --no-symbol-check is specified or rcs.symbolCheck is set to
 false in the git configuration.
 
 Typical usage:
-    git init && rcs-fast-export.rb . | git fast-import && git reset --hard
+    git init && rcs-fast-export.rb . | git fast-import && git reset
 
 Options:
 	--help, -h, -?		display this help text
