@@ -4,6 +4,7 @@
 TODO
 	* Refactor commit coalescing
 	* Add --strict-symbol-check to only coalesce commits if their symbol lists are equal
+	* Add support for commitid for coalescing commits
 	* Further coalescing options? (e.g. small logfile differences)
 	* Proper branching support in multi-file export
 	* Optimize memory usage by discarding unneeded text
