@@ -264,7 +264,7 @@ module RCS
 	def RCS.parse(fname, rcsfile)
 		rcs = RCS::File.new(fname, ::File.executable?(rcsfile))
 
-		::File.open(rcsfile, 'r') do |file|
+		::File.open(rcsfile, 'r:ASCII-8BIT') do |file|
 			status = [:basic]
 			rev = nil
 			lines = []
