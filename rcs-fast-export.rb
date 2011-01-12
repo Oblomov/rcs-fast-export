@@ -195,7 +195,7 @@ module RCS
 					if opts[:log_filename]
 						log << @fname << ": "
 					end
-					log << rev.log.to_s
+					log << rev.log.join
 
 					puts "commit refs/heads/#{branch}"
 					puts "mark :#{RCS.commit key}"
