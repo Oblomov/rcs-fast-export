@@ -241,7 +241,7 @@ module RCS
 			@date = nil
 			@state = nil
 			@next = nil
-			@branches = []
+			@branches = Set.new
 			@branch = nil
 			@branch_point = nil
 			@diff_base = nil
@@ -373,7 +373,7 @@ module RCS
 				when :branches
 					candidate = line.split(';',2)
 					branch = candidate.first.strip
-					rcs.revision[rev].branches.push branch
+					rcs.revision[rev].branches << branch
 					raise "multiple diff_bases for #{branch}" unless rcs.revision[branch].diff_base.nil?
 					rcs.revision[branch].diff_base = rev
 					# we drop the last number from the branch name
