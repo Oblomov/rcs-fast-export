@@ -865,23 +865,77 @@ else
 
 	STDERR.puts "Coalescing [1] by date with fuzz #{parse_options[:commit_fuzz]}"
 
+	thisindex = commits.size
 	commits.reverse_each do |c|
-		commits.reverse_each do |k|
-			break if k.date < c.date - parse_options[:commit_fuzz]
-			next if k == c
-			next if c.log != k.log or c.author != k.author or c.branch != k.branch
-			next if k.date > c.date
+		nextindex = thisindex
+		thisindex -= 1
+
+		cfiles = Set.new c.tree.filenames
+		ofiles = Set.new
+
+		mergeable = []
+
+		# test for mergeable commits by looking at following commits
+		while nextindex < commits.size
+			k = commits[nextindex]
+			nextindex += 1
+
+			# commits are date-sorted, so we know we can quit early if we are too far
+			# for coalescing to work
+			break if k.date > c.date + parse_options[:commit_fuzz]
+
+			skipthis = false
+
+			kfiles = Set.new k.tree.filenames
+
+			if c.log != k.log or c.author != k.author or c.branch != k.branch
+				skipthis = true
+			end
+
 			unless c.symbols.subset?(k.symbols) or k.symbols.subset?(c.symbols)
+				cflist = cfiles.to_a.join(', ')
+				kflist = kfiles.to_a.join(', ')
 				if parse_options[:symbol_check]
-					STDERR.puts "Not coalescing #{c.log.inspect}\n\tfor (#{c.tree.filenames.join(', ')})\n\tand (#{k.tree.filenames.join(', ')})"
+					STDERR.puts "Not coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
 					STDERR.puts "\tbecause their symbols disagree:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
 					STDERR.puts "\tretry with the --no-symbol-check option if you want to merge these commits anyway"
-					next
+					skipthis = true
 				elsif $DEBUG
-					STDERR.puts "Coalescing #{c.log.inspect}\n\tfor (#{c.tree.filenames.join(', ')})\n\tand (#{k.tree.filenames.join(', ')})"
+					STDERR.puts "Coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
 					STDERR.puts "\twith disagreeing symbols:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
 				end
 			end
+
+			# keep track of filenames touched by commits we are not merging with,
+			# since we don't want to merge with commits that touch them, to preserve
+			# the monotonicity of history for each file
+			# TODO we could forward-merge with them, unless some of our files were
+			# touched too.
+			if skipthis
+				# if the candidate touches any file already in the commit,
+				# we can stop looking forward
+				break unless cfiles.intersection(kfiles).empty?
+				ofiles |= kfiles
+				next
+			end
+
+			# the candidate has the same log, author, branch and appropriate symbols
+			# does it touch anything in ofiles?
+			unless ofiles.intersection(kfiles).empty?
+				if $DEBUG
+					cflist = cfiles.to_a.join(', ')
+					kflist = kfiles.to_a.join(', ')
+					oflist = ofiles.to_a.join(', ')
+					STDERR.puts "Not coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
+					STDERR.puts "\tbecause the latter intersects #{oflist} in #{(ofiles & kfiles).to_a.inspect}"
+				end
+				next
+			end
+
+			mergeable << k
+		end
+
+		mergeable.each do |k|
 			begin
 				c.merge! k
 			rescue RuntimeError => err
