@@ -13,6 +13,8 @@ TODO
 require 'pp'
 require 'set'
 
+class NoBranchSupport < NotImplementedError ; end
+
 # Integer#odd? was introduced in Ruby 1.8.7, backport it to
 # older versions
 unless 2.respond_to? :odd?
@@ -57,6 +59,11 @@ Options:
 				importing a single file
 	--[no-]log-filename	[do not] prepend the filename to the commit log when importing
 				a single file
+	--skip-branches		when exporting multiple files with a branched history, export
+				the main branch only instead of aborting due to the lack of
+				support for branched multi-file history export
+
+
 
 Config options:
 	rcs.authorsFile		for --authors-file
@@ -551,7 +558,7 @@ module RCS
 		attr_accessor :date, :log, :symbols, :author, :branch
 		attr_accessor :tree
 		def initialize(rcs, rev)
-			raise NotImplementedError if rev.branch
+			raise NoBranchSupport if rev.branch
 			self.date = rev.date.dup
 			self.log = rev.log.dup
 			self.symbols = rev.symbols.dup
@@ -640,6 +647,8 @@ opts = GetoptLong.new(
 	# prepend filenames to commit logs?
 	['--log-filename', GetoptLong::NO_ARGUMENT],
 	['--no-log-filename', GetoptLong::NO_ARGUMENT],
+	# skip branches when exporting a whole tree?
+	['--skip-branches', GetoptLong::NO_ARGUMENT],
 	['--help', '-h', '-?', GetoptLong::NO_ARGUMENT]
 )
 
@@ -707,6 +716,8 @@ opts.each do |opt, arg|
 		# this is the default, which is fine since the missing key
 		# (default) returns nil which is false in Ruby
 		parse_options[:log_filename] = false
+	when '--skip-branches'
+		parse_options[:skip_branches] = true
 	when ''
 		file_list << arg
 	when '--help'
@@ -828,7 +839,14 @@ else
 
 	rcs.each do |r|
 		r.revision.each do |k, rev|
-			commits << RCS::Commit.new(r, rev)
+			begin
+				commits << RCS::Commit.new(r, rev)
+			rescue NoBranchSupport
+				if parse_options[:skip_branches]
+					STDERR.puts "Skipping revision #{rev.rev} for #{r.fname} (branch)"
+				else raise
+				end
+			end
 		end
 	end
 
