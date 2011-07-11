@@ -557,9 +557,11 @@ module RCS
 	class Commit
 		attr_accessor :date, :log, :symbols, :author, :branch
 		attr_accessor :tree
+		attr_accessor :min_date, :max_date
 		def initialize(rcs, rev)
 			raise NoBranchSupport if rev.branch
 			self.date = rev.date.dup
+			self.min_date = self.max_date = self.date
 			self.log = rev.log.dup
 			self.symbols = rev.symbols.dup
 			self.author = rev.author
@@ -570,7 +572,7 @@ module RCS
 		end
 
 		def to_a
-			[self.date, self.branch, self.symbols, self.author, self.log, self.tree.to_a]
+			[self.min_date, self.date, self.max_date, self.branch, self.symbols, self.author, self.log, self.tree.to_a]
 		end
 
 		def warn_about(str)
@@ -589,9 +591,11 @@ module RCS
 
 		def merge!(commit)
 			self.tree.merge! commit.tree
-			if commit.date > self.date
-				warn_about "updating date to #{commit.date}"
-				self.date = commit.date
+			if commit.max_date > self.max_date
+				self.max_date = commit.max_date
+			end
+			if commit.min_date < self.min_date
+				self.min_date = commit.min_date
 			end
 			self.symbols.merge commit.symbols
 		end
@@ -882,7 +886,7 @@ else
 
 			# commits are date-sorted, so we know we can quit early if we are too far
 			# for coalescing to work
-			break if k.date > c.date + parse_options[:commit_fuzz]
+			break if k.min_date > c.max_date + parse_options[:commit_fuzz]
 
 			skipthis = false
 
