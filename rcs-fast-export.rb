@@ -129,9 +129,13 @@ Config options:
 EOM
 end
 
-def not_found(arg)
+def warning(msg)
 	$stdout.flush
-	STDERR.puts "Could not find #{arg}"
+	STDERR.puts msg
+end
+
+def not_found(arg)
+	warning "Could not find #{arg}"
 end
 
 # returns a hash that maps usernames to author names & emails
@@ -143,8 +147,7 @@ def load_authors_file(fn)
 				uname, author = line.split('=', 2)
 				uname.strip!
 				author.strip!
-				$stdout.flush
-				STDERR.puts "Username #{uname} redefined to #{author}" if hash.has_key? uname
+				warning "Username #{uname} redefined to #{author}" if hash.has_key? uname
 				hash[uname] = author
 			end
 		end
@@ -243,10 +246,9 @@ module RCS
 				# multi-digit revision components
 				keys = @revision.keys.sort
 
-				$stdout.flush
-				STDERR.puts "commit export loop ##{counter}"
-				STDERR.puts "\t#{exported.length} commits exported so far: #{exported.join(', ')}" unless exported.empty?
-				STDERR.puts "\t#{keys.size} to export: #{keys.join(', ')}"
+				warning "commit export loop ##{counter}"
+				warning "\t#{exported.length} commits exported so far: #{exported.join(', ')}" unless exported.empty?
+				warning "\t#{keys.size} to export: #{keys.join(', ')}"
 
 				keys.each do |key|
 					rev = @revision[key]
@@ -349,8 +351,7 @@ module RCS
 					next if command.empty?
 
 					if command.chomp!(';')
-						$stdout.flush
-						STDERR.puts "Skipping empty command #{command.inspect}" if $DEBUG
+						warning "Skipping empty command #{command.inspect}" if $DEBUG
 						next
 					end
 
@@ -375,8 +376,7 @@ module RCS
 						lines.clear
 						status.push :read_lines
 					when 'branch', 'access', 'locks', 'expand'
-						$stdout.flush
-						STDERR.puts "Skipping unhandled command #{command.inspect}" if $DEBUG
+						warning "Skipping unhandled command #{command.inspect}" if $DEBUG
 						status.push :skipping_lines
 						next if args.empty?
 						line = args; redo
@@ -779,8 +779,7 @@ opts.each do |opt, arg|
 	when '--authors-file'
 		authors = load_authors_file(arg)
 		redef = parse_options[:authors].keys & authors.keys
-		$stdout.flush
-		STDERR.puts "Authors file #{arg} redefines #{redef.join(', ')}" unless redef.empty?
+		warning "Authors file #{arg} redefines #{redef.join(', ')}" unless redef.empty?
 		parse_options[:authors].merge!(authors)
 	when '--rcs-suffixes'
 		# TODO
@@ -917,14 +916,12 @@ file_list.each do |arg|
 			begin
 				rcs << RCS.parse(filename, rcsfile)
 			rescue Exception => e
-				$stdout.flush
-				STDERR.puts "Failed to parse #{filename} @ #{rcsfile}:#{$.}"
+				warning "Failed to parse #{filename} @ #{rcsfile}:#{$.}"
 				raise e
 			end
 		end
 	else
-		$stdout.flush
-		STDERR.puts "Cannot handle #{arg} of #{ftype} type"
+		warning "Cannot handle #{arg} of #{ftype} type"
 		status |= 1
 	end
 end
@@ -932,8 +929,7 @@ end
 if rcs.length == 1
 	rcs.first.export_commits(parse_options)
 else
-	$stdout.flush
-	STDERR.puts "Preparing commits"
+	warning "Preparing commits"
 
 	commits = []
 
@@ -943,32 +939,27 @@ else
 				commits << RCS::Commit.new(r, rev)
 			rescue NoBranchSupport
 				if parse_options[:skip_branches]
-					$stdout.flush
-					STDERR.puts "Skipping revision #{rev.rev} for #{r.fname} (branch)"
+					warning "Skipping revision #{rev.rev} for #{r.fname} (branch)"
 				else raise
 				end
 			end
 		end
 	end
 
-	$stdout.flush
-	STDERR.puts "Sorting by date"
+	warning "Sorting by date"
 
 	commits.sort!
 
 	if $DEBUG
-		$stdout.flush
-		STDERR.puts "RAW commits (#{commits.length}):"
+		warning "RAW commits (#{commits.length}):"
 		commits.each do |c|
 			PP.pp c.to_a, $stderr
 		end
 	else
-		$stdout.flush
-		STDERR.puts "#{commits.length} single-file commits"
+		warning "#{commits.length} single-file commits"
 	end
 
-	$stdout.flush
-	STDERR.puts "Coalescing [1] by date with fuzz #{parse_options[:commit_fuzz]}"
+	warning "Coalescing [1] by date with fuzz #{parse_options[:commit_fuzz]}"
 
 	thisindex = commits.size
 	commits.reverse_each do |c|
@@ -1001,15 +992,13 @@ else
 				cflist = cfiles.to_a.join(', ')
 				kflist = kfiles.to_a.join(', ')
 				if parse_options[:symbol_check]
-					$stdout.flush
-					STDERR.puts "Not coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
-					STDERR.puts "\tbecause their symbols disagree:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
-					STDERR.puts "\tretry with the --no-symbol-check option if you want to merge these commits anyway"
+					warning "Not coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
+					warning "\tbecause their symbols disagree:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
+					warning "\tretry with the --no-symbol-check option if you want to merge these commits anyway"
 					skipthis = true
 				elsif $DEBUG
-					$stdout.flush
-					STDERR.puts "Coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
-					STDERR.puts "\twith disagreeing symbols:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
+					warning "Coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
+					warning "\twith disagreeing symbols:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
 				end
 			end
 
@@ -1033,9 +1022,8 @@ else
 					cflist = cfiles.to_a.join(', ')
 					kflist = kfiles.to_a.join(', ')
 					oflist = ofiles.to_a.join(', ')
-					$stdout.flush
-					STDERR.puts "Not coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
-					STDERR.puts "\tbecause the latter intersects #{oflist} in #{(ofiles & kfiles).to_a.inspect}"
+					warning "Not coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
+					warning "\tbecause the latter intersects #{oflist} in #{(ofiles & kfiles).to_a.inspect}"
 				end
 				next
 			end
@@ -1048,9 +1036,8 @@ else
 				c.merge! k
 			rescue RuntimeError => err
 				fuzz = c.date - k.date
-				$stdout.flush
-				STDERR.puts "Fuzzy commit coalescing failed: #{err}"
-				STDERR.puts "\tretry with commit fuzz < #{fuzz} if you don't want to see this message"
+				warning "Fuzzy commit coalescing failed: #{err}"
+				warning "\tretry with commit fuzz < #{fuzz} if you don't want to see this message"
 				break
 			end
 			commits.delete k
@@ -1058,14 +1045,12 @@ else
 	end
 
 	if $DEBUG
-		$stdout.flush
-		STDERR.puts "[1] commits (#{commits.length}):"
+		warning "[1] commits (#{commits.length}):"
 		commits.each do |c|
 			PP.pp c.to_a, $stderr
 		end
 	else
-		$stdout.flush
-		STDERR.puts "#{commits.length} coalesced commits"
+		warning "#{commits.length} coalesced commits"
 	end
 
 	commits.each { |c| c.export(parse_options) }
