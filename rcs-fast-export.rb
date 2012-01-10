@@ -78,6 +78,7 @@ def version
 end
 
 def usage
+	$stdout.flush
 	STDERR.puts <<EOM
 #{$0} [options] file [file ...]
 
@@ -129,6 +130,7 @@ EOM
 end
 
 def not_found(arg)
+	$stdout.flush
 	STDERR.puts "Could not find #{arg}"
 end
 
@@ -141,6 +143,7 @@ def load_authors_file(fn)
 				uname, author = line.split('=', 2)
 				uname.strip!
 				author.strip!
+				$stdout.flush
 				STDERR.puts "Username #{uname} redefined to #{author}" if hash.has_key? uname
 				hash[uname] = author
 			end
@@ -240,6 +243,7 @@ module RCS
 				# multi-digit revision components
 				keys = @revision.keys.sort
 
+				$stdout.flush
 				STDERR.puts "commit export loop ##{counter}"
 				STDERR.puts "\t#{exported.length} commits exported so far: #{exported.join(', ')}" unless exported.empty?
 				STDERR.puts "\t#{keys.size} to export: #{keys.join(', ')}"
@@ -345,6 +349,7 @@ module RCS
 					next if command.empty?
 
 					if command.chomp!(';')
+						$stdout.flush
 						STDERR.puts "Skipping empty command #{command.inspect}" if $DEBUG
 						next
 					end
@@ -370,6 +375,7 @@ module RCS
 						lines.clear
 						status.push :read_lines
 					when 'branch', 'access', 'locks', 'expand'
+						$stdout.flush
 						STDERR.puts "Skipping unhandled command #{command.inspect}" if $DEBUG
 						status.push :skipping_lines
 						next if args.empty?
@@ -773,6 +779,7 @@ opts.each do |opt, arg|
 	when '--authors-file'
 		authors = load_authors_file(arg)
 		redef = parse_options[:authors].keys & authors.keys
+		$stdout.flush
 		STDERR.puts "Authors file #{arg} redefines #{redef.join(', ')}" unless redef.empty?
 		parse_options[:authors].merge!(authors)
 	when '--rcs-suffixes'
@@ -910,11 +917,13 @@ file_list.each do |arg|
 			begin
 				rcs << RCS.parse(filename, rcsfile)
 			rescue Exception => e
+				$stdout.flush
 				STDERR.puts "Failed to parse #{filename} @ #{rcsfile}:#{$.}"
 				raise e
 			end
 		end
 	else
+		$stdout.flush
 		STDERR.puts "Cannot handle #{arg} of #{ftype} type"
 		status |= 1
 	end
@@ -923,6 +932,7 @@ end
 if rcs.length == 1
 	rcs.first.export_commits(parse_options)
 else
+	$stdout.flush
 	STDERR.puts "Preparing commits"
 
 	commits = []
@@ -933,6 +943,7 @@ else
 				commits << RCS::Commit.new(r, rev)
 			rescue NoBranchSupport
 				if parse_options[:skip_branches]
+					$stdout.flush
 					STDERR.puts "Skipping revision #{rev.rev} for #{r.fname} (branch)"
 				else raise
 				end
@@ -940,19 +951,23 @@ else
 		end
 	end
 
+	$stdout.flush
 	STDERR.puts "Sorting by date"
 
 	commits.sort!
 
 	if $DEBUG
+		$stdout.flush
 		STDERR.puts "RAW commits (#{commits.length}):"
 		commits.each do |c|
 			PP.pp c.to_a, $stderr
 		end
 	else
+		$stdout.flush
 		STDERR.puts "#{commits.length} single-file commits"
 	end
 
+	$stdout.flush
 	STDERR.puts "Coalescing [1] by date with fuzz #{parse_options[:commit_fuzz]}"
 
 	thisindex = commits.size
@@ -986,11 +1001,13 @@ else
 				cflist = cfiles.to_a.join(', ')
 				kflist = kfiles.to_a.join(', ')
 				if parse_options[:symbol_check]
+					$stdout.flush
 					STDERR.puts "Not coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
 					STDERR.puts "\tbecause their symbols disagree:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
 					STDERR.puts "\tretry with the --no-symbol-check option if you want to merge these commits anyway"
 					skipthis = true
 				elsif $DEBUG
+					$stdout.flush
 					STDERR.puts "Coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
 					STDERR.puts "\twith disagreeing symbols:\n\t#{c.symbols.to_a.inspect} and #{k.symbols.to_a.inspect} disagree on #{(c.symbols ^ k.symbols).to_a.inspect}"
 				end
@@ -1016,6 +1033,7 @@ else
 					cflist = cfiles.to_a.join(', ')
 					kflist = kfiles.to_a.join(', ')
 					oflist = ofiles.to_a.join(', ')
+					$stdout.flush
 					STDERR.puts "Not coalescing #{c.log.inspect}\n\tfor (#{cflist})\n\tand (#{kflist})"
 					STDERR.puts "\tbecause the latter intersects #{oflist} in #{(ofiles & kfiles).to_a.inspect}"
 				end
@@ -1030,6 +1048,7 @@ else
 				c.merge! k
 			rescue RuntimeError => err
 				fuzz = c.date - k.date
+				$stdout.flush
 				STDERR.puts "Fuzzy commit coalescing failed: #{err}"
 				STDERR.puts "\tretry with commit fuzz < #{fuzz} if you don't want to see this message"
 				break
@@ -1039,11 +1058,13 @@ else
 	end
 
 	if $DEBUG
+		$stdout.flush
 		STDERR.puts "[1] commits (#{commits.length}):"
 		commits.each do |c|
 			PP.pp c.to_a, $stderr
 		end
 	else
+		$stdout.flush
 		STDERR.puts "#{commits.length} coalesced commits"
 	end
 
