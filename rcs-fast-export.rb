@@ -540,7 +540,11 @@ module RCS
 		def to_a
 			files = []
 			@files.map do |rcs, rev|
-				files << "M #{rcs.mode} :#{RCS.blob rcs.fname, rev.rev} #{rcs.fname}"
+				if rev.state.downcase == "dead"
+					files << "D #{rcs.fname}"
+				else
+					files << "M #{rcs.mode} :#{RCS.blob rcs.fname, rev.rev} #{rcs.fname}"
+				end
 			end
 			files
 		end
