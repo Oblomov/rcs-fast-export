@@ -352,7 +352,17 @@ module RCS
 		end
 	end
 
-	def RCS.parse(fname, rcsfile)
+	# TODO: what if a revision does not end with newline?
+	def RCS.expand_keywords(rcsfile, revision)
+		ret = ::File.read("|co -q -p#{revision} #{rcsfile}")
+		lines = []
+		ret.each_line do |line|
+			lines << line
+		end
+		lines
+	end
+
+	def RCS.parse(fname, rcsfile, opts={})
 		rcs = RCS::File.new(fname, ::File.executable?(rcsfile))
 
 		::File.open(rcsfile, 'r:ASCII-8BIT') do |file|
@@ -497,6 +507,9 @@ module RCS
 					status.pop
 				when :head
 					rcs.revision[rev].text.replace lines.dup
+					if opts[:expand_keywords]
+						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
+					end
 					puts rcs.revision[rev].blob
 					status.pop
 				when :diff
@@ -567,6 +580,9 @@ module RCS
 					buffer.flatten!
 
 					rcs.revision[rev].text = buffer
+					if opts[:expand_keywords]
+						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
+					end
 					puts rcs.revision[rev].blob
 					status.pop
 				else
@@ -734,6 +750,8 @@ opts = GetoptLong.new(
 	# Authors file, like git-svn and git-cvsimport, more than one can be
 	# specified
 	['--authors-file', '-A', GetoptLong::REQUIRED_ARGUMENT],
+	# Use "co" to obtain the actual revision with keywords expanded.
+	['--expand-keywords', GetoptLong::NO_ARGUMENT],
 	# RCS file suffix, like RCS
 	['--rcs-suffixes', '-x', GetoptLong::REQUIRED_ARGUMENT],
 	# Shell pattern to identify files to be ignored
@@ -807,6 +825,8 @@ opts.each do |opt, arg|
 		redef = parse_options[:authors].keys & authors.keys
 		warning "Authors file #{arg} redefines #{redef.join(', ')}" unless redef.empty?
 		parse_options[:authors].merge!(authors)
+	when '--expand-keywords'
+		parse_options[:expand_keywords] = true
 	when '--rcs-suffixes'
 		# TODO
 	when '--ignore'
@@ -925,7 +945,7 @@ file_list.each do |arg|
 				end
 			end
 		end
-		rcs << RCS.parse(filename, rcsfile)
+		rcs << RCS.parse(filename, rcsfile, parse_options)
 	when 'directory'
 		argdirname = arg.chomp(File::SEPARATOR)
 		pattern = File.join(argdirname, '**', '*' + SFX)
@@ -956,7 +976,7 @@ file_list.each do |arg|
 
 			# proceed
 			begin
-				rcs << RCS.parse(filename, rcsfile)
+				rcs << RCS.parse(filename, rcsfile, parse_options)
 			rescue Exception => e
 				warning "Failed to parse #{filename} @ #{rcsfile}:#{$.}"
 				raise e
