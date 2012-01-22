@@ -21,6 +21,7 @@ TODO
 	* Further coalescing options? (e.g. small logfile differences)
 	* Proper branching support in multi-file export
 	* Optimize memory usage by discarding unneeded text
+	* Provide an option that marks a file as deleted based on symbolic revisions
 =end
 
 require 'pp'
