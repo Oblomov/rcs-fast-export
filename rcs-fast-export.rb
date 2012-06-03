@@ -105,6 +105,8 @@ Typical usage:
 Options:
 	--help, -h, -?		display this help text
 	--authors-file, -A	specify a file containing username = Full Name <email> mappings
+	--[no-]author-is-committer
+				use the author name and date as committer identity
 	--ignore		ignore the specified files (shell pattern)
 	--rcs-commit-fuzz	fuzziness in RCS commits to be considered a single one when
 				importing multiple files
@@ -124,6 +126,7 @@ Options:
 
 Config options:
 	rcs.authorsFile		for --authors-file
+	rcs.authorIsCommitter	for --author-is-committer
 	rcs.tagEachRev		for --tag-each-rev
 	rcs.logFilename		for --log-filename
 	rcs.commitFuzz		for --rcs-commit-fuzz
@@ -141,6 +144,15 @@ end
 
 def not_found(arg)
 	warning "Could not find #{arg}"
+end
+
+def emit_committer(opts, author, date)
+	if opts[:author_is_committer]
+		committer = "#{author} #{date}"
+	else
+		committer = `git var GIT_COMMITTER_IDENT`.chomp
+	end
+	puts "committer #{committer}"
 end
 
 # returns a hash that maps usernames to author names & emails
@@ -291,7 +303,8 @@ module RCS
 
 					puts "commit refs/heads/#{branch}"
 					puts "mark :#{RCS.commit key}"
-					puts "committer #{author} #{date}"
+					puts "author #{author} #{date}"
+					emit_committer(opts, author, date)
 					puts "data #{log.length}"
 					puts log unless log.empty?
 					puts "from :#{RCS.commit from}" if from
@@ -726,7 +739,8 @@ module RCS
 
 			puts "commit refs/heads/#{xbranch}"
 			puts "mark :#{RCS.commit key}"
-			puts "committer #{xauthor} #{xdate}"
+			puts "author #{xauthor} #{xdate}"
+			emit_committer(opts, xauthor, xdate)
 			puts "data #{xlog.length}"
 			puts xlog unless xlog.empty?
 			# TODO branching support for multi-file export
@@ -754,6 +768,9 @@ opts = GetoptLong.new(
 	# Authors file, like git-svn and git-cvsimport, more than one can be
 	# specified
 	['--authors-file', '-A', GetoptLong::REQUIRED_ARGUMENT],
+	# Use author identity as committer identity?
+	['--author-is-committer', GetoptLong::NO_ARGUMENT],
+	['--no-author-is-committer', GetoptLong::NO_ARGUMENT],
 	# Use "co" to obtain the actual revision with keywords expanded.
 	['--expand-keywords', GetoptLong::NO_ARGUMENT],
 	# RCS file suffix, like RCS
@@ -800,6 +817,10 @@ parse_options = {
 	parse_options[:authors].merge! load_authors_file(fn.chomp)
 end
 
+parse_options[:author_is_committer] = (
+	`git config --bool rcs.authoriscommitter`.chomp == 'false'
+) ? false : true
+
 parse_options[:tag_each_rev] = (
 	`git config --bool rcs.tageachrev`.chomp == 'true'
 ) ? true : false
@@ -829,6 +850,10 @@ opts.each do |opt, arg|
 		redef = parse_options[:authors].keys & authors.keys
 		warning "Authors file #{arg} redefines #{redef.join(', ')}" unless redef.empty?
 		parse_options[:authors].merge!(authors)
+	when '--author-is-committer'
+		parse_options[:author_is_committer] = true
+	when '--no-author-is-committer'
+		parse_options[:author_is_committer] = false
 	when '--expand-keywords'
 		parse_options[:expand_keywords] = true
 	when '--rcs-suffixes'
