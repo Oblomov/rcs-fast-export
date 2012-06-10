@@ -751,7 +751,6 @@ def steal_username
 		# the user's .(g)vimrc for a changelog_username setting
 		['~/.vimrc',  /changelog_username\s*=\s*(["'])?(.*)\1$/, 2],
 		['~/.gvimrc', /changelog_username\s*=\s*(["'])?(.*)\1$/, 2],
-		[]
 	].each do |fn, rx, idx|
 		file = File.expand_path fn
 		if File.readable?(file) and File.read(file) =~ rx
