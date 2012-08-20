@@ -607,7 +607,7 @@ module RCS
 		def export(opts={})
 			xbranch = self.branch || 'master'
 			xauthor = opts[:authors][self.author] || "#{self.author} <empty>"
-			xlog = self.log.to_s
+			xlog = self.log.join
 			numdate = self.date.tv_sec
 			xdate = "#{numdate} +0000"
 			key = numdate.to_s
