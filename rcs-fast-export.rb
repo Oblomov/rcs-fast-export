@@ -817,12 +817,17 @@ file_list.each do |arg|
 		end
 		rcs << RCS.parse(filename, rcsfile)
 	when 'directory'
-		pattern = File.join(arg, '**', '*' + SFX)
+		argdirname = arg.chomp(File::SEPARATOR)
+		pattern = File.join(argdirname, '**', '*' + SFX)
 		Dir.glob(pattern).each do |rcsfile|
 			filename = File.basename(rcsfile, SFX)
 			path = File.dirname(rcsfile)
 			path.sub!(/\/?RCS$/, '') # strip final /RCS if present
-			path.sub!(/^#{Regexp.escape arg}\/?/, '') # strip initial dirname
+			# strip off the portion of the path sepecified
+			# on the command line from the front of the path
+			# (or delete the path completely if it is the same
+			# as the specified directory)
+			path.sub!(/^#{Regexp.escape argdirname}(#{File::SEPARATOR}|$)/, '')
 			filename = File.join(path, filename) unless path.empty?
 			begin
 				rcs << RCS.parse(filename, rcsfile)
