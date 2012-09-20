@@ -209,7 +209,7 @@ module RCS
 					puts "committer #{author} #{date}"
 					puts "data #{log.length}"
 					puts log unless log.empty?
-					puts "from :#{RCS.commit from}" if rev.branch_point
+					puts "from :#{RCS.commit from}" if from
 					puts "M #{@mode} :#{RCS.blob @fname, key} #{@fname}"
 
 					# TODO FIXME this *should* be safe, in
