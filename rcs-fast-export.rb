@@ -364,10 +364,14 @@ module RCS
 						rcs.revision[rev].date = $1
 						rcs.revision[rev].author = $2
 						rcs.revision[rev].state = $3
-					when 'branches'
-						status.push :branches
-					when /branches\s*;/
+					when /^branches\s*;/
 						next
+					when /^branches\s+/
+						status.push :branches
+						if line.index(';')
+							line = line.sub(/^branches\s+/,'')
+							redo
+						end
 					when /^next\s+(\S+)?;$/
 						nxt = rcs.revision[rev].next = $1
 						next unless nxt
