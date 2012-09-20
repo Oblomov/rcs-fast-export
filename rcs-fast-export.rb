@@ -366,7 +366,7 @@ module RCS
 						rcs.revision[rev].state = $3
 					when /^branches\s*;/
 						next
-					when /^branches\s+/
+					when /^branches(?:\s+|$)/
 						status.push :branches
 						if line.index(';')
 							line = line.sub(/^branches\s+/,'')
