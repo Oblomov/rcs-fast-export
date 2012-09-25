@@ -25,6 +25,39 @@ unless 2.respond_to? :odd?
 	end
 end
 
+=begin
+RCS fast-export version: set to `git` in the repository, but can be overridden
+by packagers, e.g. based on the latest tag, git description, custom packager
+patches or whatever.
+
+When the version is set to `git`, we make a little effort to find more information
+about which commit we are at.
+=end
+
+RFE_VERSION="git"
+
+def version
+	if RFE_VERSION == "git"
+		Dir.chdir File.expand_path File.dirname File.readlink __FILE__
+
+		if File.exists? '.git' ; begin
+			git_out = `git log -1 --pretty="%h %H%n%ai" | git name-rev --stdin`.split("\n")
+			hash=git_out.first.split.first
+			branch=git_out.first.split('(').last.chomp(')')
+			date=git_out.last.split.first
+			changed=`git diff --no-ext-diff --quiet --exit-code`
+			branch << "*" unless $?.success?
+			info=" [#{branch}] #{hash} (#{date})"
+		rescue
+			info=" (no info)"
+		end ; end
+
+		STDERR.puts "#{$0}: RCS fast-export, #{RFE_VERSION} version#{info}"
+	else
+		STDERR.puts "#{$0}: RCS fast-export, version #{RFE_VERSION}"
+	end
+end
+
 def usage
 	STDERR.puts <<EOM
 #{$0} [options] file [file ...]
@@ -661,6 +694,9 @@ opts = GetoptLong.new(
 	['--no-log-filename', GetoptLong::NO_ARGUMENT],
 	# skip branches when exporting a whole tree?
 	['--skip-branches', GetoptLong::NO_ARGUMENT],
+	# show current version
+	['--version', '-v', GetoptLong::NO_ARGUMENT],
+	# show help/usage
 	['--help', '-h', '-?', GetoptLong::NO_ARGUMENT]
 )
 
@@ -732,6 +768,9 @@ opts.each do |opt, arg|
 		parse_options[:skip_branches] = true
 	when ''
 		file_list << arg
+	when '--version'
+		version
+		exit
 	when '--help'
 		usage
 		exit
