@@ -1,6 +1,19 @@
 #!/usr/bin/ruby
 
 =begin
+RCS fast export: run the script with the `--usage` option for further
+information.
+
+No installation needed: you can run it from anywhere, including the git
+checkout directory. For extra comfort, symlink it to some directory in
+your PATH. I myself have this symlink:
+
+	~/bin/rcs-fast-export -> ~/src/rcs-fast-export/rcs-fast-export.rb
+
+allowing me to run `rcs-fast-export` from anywhere.
+=end
+
+=begin
 TODO
 	* Refactor commit coalescing
 	* Add --strict-symbol-check to only coalesce commits if their symbol lists are equal
