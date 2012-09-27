@@ -496,7 +496,7 @@ module RCS
 						end
 
 						l.chomp!
-						raise 'malformed diff' unless l =~ /^([ad])(\d+) (\d+)$/
+						raise "malformed diff @ #{rcsfile}:#{file.lineno-difflines.length-1} `#{l}`" unless l =~ /^([ad])(\d+) (\d+)$/
 						diff_cmd = $1.intern
 						index = $2.to_i
 						count = $3.to_i
