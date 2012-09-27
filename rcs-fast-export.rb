@@ -470,6 +470,10 @@ module RCS
 				when :diff
 					difflines.replace lines.dup
 					difflines.pop if difflines.last.empty?
+					if difflines.first.chomp.empty?
+						alert "malformed diff: empty initial line @ #{rcsfile}:#{file.lineno-difflines.length-1}", "skipping"
+						difflines.shift
+					end
 					base = rcs.revision[rev].diff_base
 					unless rcs.revision[base].text
 						pp rcs
