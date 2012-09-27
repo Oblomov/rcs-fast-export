@@ -145,6 +145,12 @@ def load_authors_file(fn)
 	return hash
 end
 
+# display a message about a (recoverable) error
+def alert(msg, action)
+	STDERR.puts "ERROR:\t#{msg}"
+	STDERR.puts "\t#{action}"
+end
+
 class Time
 	def Time.rcs(string)
 		fields = string.split('.')
