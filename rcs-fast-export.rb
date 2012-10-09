@@ -38,6 +38,11 @@ unless 2.respond_to? :odd?
 	end
 end
 
+# Set standard output to binary mode: git fast-import doesn't like Windows
+# line-endings, and this ensures that the line termination will be a simple 0x0a
+# on Windows too (it expands to 0x0D 0x0A otherwise).
+STDOUT.binmode
+
 =begin
 RCS fast-export version: set to `git` in the repository, but can be overridden
 by packagers, e.g. based on the latest tag, git description, custom packager
