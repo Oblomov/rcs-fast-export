@@ -51,7 +51,8 @@ RFE_VERSION="git"
 
 def version
 	if RFE_VERSION == "git"
-		Dir.chdir File.expand_path File.dirname File.readlink __FILE__
+		nolinkfile = File.readlink(__FILE__) rescue __FILE__
+		Dir.chdir File.expand_path File.dirname nolinkfile
 
 		if File.exists? '.git' ; begin
 			git_out = `git log -1 --pretty="%h %H%n%ai" | git name-rev --stdin`.split("\n")
