@@ -479,7 +479,7 @@ module RCS
 					if difflines.first.chomp.empty?
 						alert "malformed diff: empty initial line @ #{rcsfile}:#{file.lineno-difflines.length-1}", "skipping"
 						difflines.shift
-					end
+					end unless difflines.empty?
 					base = rcs.revision[rev].diff_base
 					unless rcs.revision[base].text
 						pp rcs
