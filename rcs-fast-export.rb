@@ -161,6 +161,10 @@ class Time
 	def Time.rcs(string)
 		fields = string.split('.')
 		raise ArgumentError, "wrong number of fields for RCS date #{string}" unless fields.length == 6
+		# in Ruby 1.9, '99' is interpreted as year 99, not year 1999
+		if fields.first.length < 3
+			fields.first.insert 0, '19'
+		end
 		Time.utc(*fields)
 	end
 end
