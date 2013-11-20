@@ -1,7 +1,7 @@
 #!/usr/bin/ruby
 
 =begin
-RCS fast export: run the script with the `--usage` option for further
+RCS fast export: run the script with the `--help` option for further
 information.
 
 No installation needed: you can run it from anywhere, including the git
