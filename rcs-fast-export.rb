@@ -895,7 +895,7 @@ file_list.each do |arg|
 	when 'directory'
 		argdirname = arg.chomp(File::SEPARATOR)
 		pattern = File.join(argdirname, '**', '*' + SFX)
-		Dir.glob(pattern).each do |rcsfile|
+		Dir.glob(pattern, File::FNM_DOTMATCH).each do |rcsfile|
 			filename = File.basename(rcsfile, SFX)
 			path = File.dirname(rcsfile)
 			# strip trailing "/RCS" if present, or "RCS" if that's
