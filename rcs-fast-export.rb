@@ -108,6 +108,8 @@ Options:
 	--rcs-commit-fuzz	fuzziness in RCS commits to be considered a single one when
 				importing multiple files
 				(in seconds, defaults to 300, i.e. 5 minutes)
+	--[no-]warn-missing-authors
+				[do not] warn about usernames missing from the map file
 	--[no-]symbol-check	[do not] check symbols when coalescing commits
 	--[no-]tag-each-rev	[do not] create a lightweight tag for each RCS revision when
 				importing a single file
@@ -124,6 +126,7 @@ Config options:
 	rcs.tagEachRev		for --tag-each-rev
 	rcs.logFilename		for --log-filename
 	rcs.commitFuzz		for --rcs-commit-fuzz
+	rcs.warnMissingAuthors  for --warn-missing-authors
 	rcs.symbolCheck		for --rcs-symbol-check
 	rcs.tagFuzz		for --rcs-tag-fuzz
 
@@ -156,6 +159,18 @@ def load_authors_file(fn)
 		not_found(fn)
 	end
 	return hash
+end
+
+def username_to_author(name, opts)
+	map = opts[:authors]
+	raise "no authors map defined" unless map and Hash === map
+
+	# if name is not found in map, provide a default one, optionally giving a warning (once)
+	unless map.key? name
+		warning "no author found for #{name}" if opts[:warn_missing_authors]
+		map[name] = "#{name} <empty>"
+	end
+	return map[name]
 end
 
 # display a message about a (recoverable) error
@@ -265,7 +280,7 @@ module RCS
 					end
 
 					branch = rev.branch || 'master'
-					author = opts[:authors][rev.author] || "#{rev.author} <empty>"
+					author = username_to_author(rev.author, opts)
 					date = "#{rev.date.tv_sec} +0000"
 					log = String.new
 					if opts[:log_filename]
@@ -683,7 +698,7 @@ module RCS
 
 		def export(opts={})
 			xbranch = self.branch || 'master'
-			xauthor = opts[:authors][self.author] || "#{self.author} <empty>"
+			xauthor = username_to_author(self.author, opts)
 			xlog = self.log.join
 			numdate = self.date.tv_sec
 			xdate = "#{numdate} +0000"
@@ -725,6 +740,9 @@ opts = GetoptLong.new(
 	['--ignore', GetoptLong::REQUIRED_ARGUMENT],
 	# Date fuzziness for commits to be considered the same (in seconds)
 	['--rcs-commit-fuzz', GetoptLong::REQUIRED_ARGUMENT],
+	# warn about usernames missing in authors file map?
+	['--warn-missing-authors', GetoptLong::NO_ARGUMENT],
+	['--no-warn-missing-authors', GetoptLong::NO_ARGUMENT],
 	# check symbols when coalescing?
 	['--symbol-check', GetoptLong::NO_ARGUMENT],
 	['--no-symbol-check', GetoptLong::NO_ARGUMENT],
@@ -776,6 +794,10 @@ parse_options[:tag_fuzz] = fuzz.to_i unless fuzz.empty?
 
 parse_options[:symbol_check] = (
 	`git config --bool rcs.symbolcheck`.chomp == 'false'
+) ? false : true
+
+parse_options[:warn_missing_authors] = (
+	`git config --bool rcs.warnmissingauthors`.chomp == 'false'
 ) ? false : true
 
 opts.each do |opt, arg|
