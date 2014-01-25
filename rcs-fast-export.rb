@@ -104,6 +104,7 @@ Typical usage:
 Options:
 	--help, -h, -?		display this help text
 	--authors-file, -A	specify a file containing username = Full Name <email> mappings
+	--ignore		ignore the specified files (shell pattern)
 	--rcs-commit-fuzz	fuzziness in RCS commits to be considered a single one when
 				importing multiple files
 				(in seconds, defaults to 300, i.e. 5 minutes)
@@ -720,6 +721,8 @@ opts = GetoptLong.new(
 	['--authors-file', '-A', GetoptLong::REQUIRED_ARGUMENT],
 	# RCS file suffix, like RCS
 	['--rcs-suffixes', '-x', GetoptLong::REQUIRED_ARGUMENT],
+	# Shell pattern to identify files to be ignored
+	['--ignore', GetoptLong::REQUIRED_ARGUMENT],
 	# Date fuzziness for commits to be considered the same (in seconds)
 	['--rcs-commit-fuzz', GetoptLong::REQUIRED_ARGUMENT],
 	# check symbols when coalescing?
@@ -747,6 +750,7 @@ opts.ordering = GetoptLong::RETURN_IN_ORDER
 file_list = []
 parse_options = {
 	:authors => Hash.new,
+	:ignore => Array.new,
 	:commit_fuzz => 300,
 	:tag_fuzz => -1,
 }
@@ -783,6 +787,8 @@ opts.each do |opt, arg|
 		parse_options[:authors].merge!(authors)
 	when '--rcs-suffixes'
 		# TODO
+	when '--ignore'
+		parse_options[:ignore] << arg
 	when '--rcs-commit-fuzz'
 		parse_options[:commit_fuzz] = arg.to_i
 	when '--rcs-tag-fuzz'
@@ -913,6 +919,20 @@ file_list.each do |arg|
 			# as the specified directory)
 			path.sub!(/^#{Regexp.escape argdirname}(#{File::SEPARATOR}|$)/, '')
 			filename = File.join(path, filename) unless path.empty?
+
+			# skip file if it's to be ignored
+			unless parse_options[:ignore].empty?
+				ignored = false
+				parse_options[:ignore].each do |pat|
+					if File.fnmatch?(pat, filename, File::FNM_PATHNAME)
+						ignored = true
+						break
+					end
+				end
+				next if ignored
+			end
+
+			# proceed
 			begin
 				rcs << RCS.parse(filename, rcsfile)
 			rescue Exception => e
