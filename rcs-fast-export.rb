@@ -901,7 +901,7 @@ file_list.each do |arg|
 			# strip trailing "/RCS" if present, or "RCS" if that's
 			# the full path
 			path.sub!(/(^|#{File::SEPARATOR})RCS$/, '')
-			# strip off the portion of the path sepecified
+			# strip off the portion of the path specified
 			# on the command line from the front of the path
 			# (or delete the path completely if it is the same
 			# as the specified directory)
