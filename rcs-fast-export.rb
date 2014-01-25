@@ -353,6 +353,7 @@ module RCS
 	end
 
 	# TODO: what if a revision does not end with newline?
+	# TODO this should be done internally, not piping out to RCS
 	def RCS.expand_keywords(rcsfile, revision)
 		ret = ::File.read("|co -q -p#{revision} #{rcsfile}")
 		lines = []
@@ -506,82 +507,84 @@ module RCS
 					rcs.revision[rev].log.replace lines.dup
 					status.pop
 				when :head
-					rcs.revision[rev].text.replace lines.dup
 					if opts[:expand_keywords]
 						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
+					else
+						rcs.revision[rev].text.replace lines.dup
 					end
 					puts rcs.revision[rev].blob
 					status.pop
 				when :diff
-					difflines.replace lines.dup
-					difflines.pop if difflines.last.empty?
-					if difflines.first.chomp.empty?
-						alert "malformed diff: empty initial line @ #{rcsfile}:#{file.lineno-difflines.length-1}", "skipping"
-						difflines.shift
-					end unless difflines.empty?
-					base = rcs.revision[rev].diff_base
-					unless rcs.revision[base].text
-						pp rcs
-						puts rev, base
-						raise 'no diff base!'
-					end
-					# deep copy
-					buffer = []
-					rcs.revision[base].text.each { |l| buffer << [l.dup] }
-
-					adding = false
-					index = nil
-					count = nil
-
-					while l = difflines.shift
-						if adding
-							raise 'negative index during insertion' if index < 0
-							raise 'negative count during insertion' if count < 0
-							adding << l
-							count -= 1
-							# collected all the lines, put the before
-							unless count > 0
-								unless buffer[index]
-									buffer[index] = []
-								end
-								buffer[index].unshift(*adding)
-								adding = false
-							end
-							next
-						end
-
-						l.chomp!
-						raise "malformed diff @ #{rcsfile}:#{file.lineno-difflines.length-1} `#{l}`" unless l =~ /^([ad])(\d+) (\d+)$/
-						diff_cmd = $1.intern
-						index = $2.to_i
-						count = $3.to_i
-						case diff_cmd
-						when :d
-							# for deletion, index 1 is the first index, so the Ruby
-							# index is one less than the diff one
-							index -= 1
-							# we replace them with empty string so that 'a' commands
-							# referring to the same line work properly
-							while count > 0
-								buffer[index].clear
-								index += 1
-								count -= 1
-							end
-						when :a
-							# addition will prepend the appropriate lines
-							# to the given index, and in this case Ruby
-							# and diff indices are the same
-							adding = []
-						end
-					end
-
-					# turn the buffer into an array of lines, deleting the empty ones
-					buffer.delete_if { |l| l.empty? }
-					buffer.flatten!
-
-					rcs.revision[rev].text = buffer
 					if opts[:expand_keywords]
 						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
+					else
+						difflines.replace lines.dup
+						difflines.pop if difflines.last.empty?
+						if difflines.first.chomp.empty?
+							alert "malformed diff: empty initial line @ #{rcsfile}:#{file.lineno-difflines.length-1}", "skipping"
+							difflines.shift
+						end unless difflines.empty?
+						base = rcs.revision[rev].diff_base
+						unless rcs.revision[base].text
+							pp rcs
+							puts rev, base
+							raise 'no diff base!'
+						end
+						# deep copy
+						buffer = []
+						rcs.revision[base].text.each { |l| buffer << [l.dup] }
+
+						adding = false
+						index = nil
+						count = nil
+
+						while l = difflines.shift
+							if adding
+								raise 'negative index during insertion' if index < 0
+								raise 'negative count during insertion' if count < 0
+								adding << l
+								count -= 1
+								# collected all the lines, put the before
+								unless count > 0
+									unless buffer[index]
+										buffer[index] = []
+									end
+									buffer[index].unshift(*adding)
+									adding = false
+								end
+								next
+							end
+
+							l.chomp!
+							raise "malformed diff @ #{rcsfile}:#{file.lineno-difflines.length-1} `#{l}`" unless l =~ /^([ad])(\d+) (\d+)$/
+							diff_cmd = $1.intern
+							index = $2.to_i
+							count = $3.to_i
+							case diff_cmd
+							when :d
+								# for deletion, index 1 is the first index, so the Ruby
+								# index is one less than the diff one
+								index -= 1
+								# we replace them with empty string so that 'a' commands
+								# referring to the same line work properly
+								while count > 0
+									buffer[index].clear
+									index += 1
+									count -= 1
+								end
+							when :a
+								# addition will prepend the appropriate lines
+								# to the given index, and in this case Ruby
+								# and diff indices are the same
+								adding = []
+							end
+						end
+
+						# turn the buffer into an array of lines, deleting the empty ones
+						buffer.delete_if { |l| l.empty? }
+						buffer.flatten!
+
+						rcs.revision[rev].text = buffer
 					end
 					puts rcs.revision[rev].blob
 					status.pop
