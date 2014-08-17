@@ -108,6 +108,7 @@ Options:
 	--[no-]author-is-committer
 				use the author name and date as committer identity
 	--ignore		ignore the specified files (shell pattern)
+	--log-encoding          specify the encoding of log messages, for transcoding to UTF-8
 	--rcs-commit-fuzz	fuzziness in RCS commits to be considered a single one when
 				importing multiple files
 				(in seconds, defaults to 300, i.e. 5 minutes)
@@ -267,6 +268,7 @@ module RCS
 		def export_commits(opts={})
 			counter = 0
 			exported = []
+			log_enc = opts[:log_encoding]
 			until @revision.empty?
 				counter += 1
 
@@ -299,7 +301,15 @@ module RCS
 					if opts[:log_filename]
 						log << @fname << ": "
 					end
-					log << rev.log.join
+					if log_enc
+						# git fast-import expects logs to be in UTF-8, so if a different log encoding
+						# is specified for the log we transcode from whatever was specified to UTF-8.
+						# we then mark the string as ASCII-8BIT (as everything else) so that string
+						# lengths are computed in bytes
+						log << rev.log.join.encode('UTF-8', log_enc).force_encoding('ASCII-8BIT')
+					else
+						log << rev.log.join
+					end
 
 					puts "commit refs/heads/#{branch}"
 					puts "mark :#{RCS.commit key}"
@@ -777,6 +787,8 @@ opts = GetoptLong.new(
 	['--rcs-suffixes', '-x', GetoptLong::REQUIRED_ARGUMENT],
 	# Shell pattern to identify files to be ignored
 	['--ignore', GetoptLong::REQUIRED_ARGUMENT],
+	# Encoding of log messages in the RCS files
+	['--log-encoding', GetoptLong::REQUIRED_ARGUMENT],
 	# Date fuzziness for commits to be considered the same (in seconds)
 	['--rcs-commit-fuzz', GetoptLong::REQUIRED_ARGUMENT],
 	# warn about usernames missing in authors file map?
@@ -860,6 +872,8 @@ opts.each do |opt, arg|
 		# TODO
 	when '--ignore'
 		parse_options[:ignore] << arg
+	when '--log-encoding'
+		parse_options[:log_encoding] = Encoding.find(arg)
 	when '--rcs-commit-fuzz'
 		parse_options[:commit_fuzz] = arg.to_i
 	when '--rcs-tag-fuzz'
