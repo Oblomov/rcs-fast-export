@@ -43,6 +43,7 @@ end
 # line-endings, and this ensures that the line termination will be a simple 0x0a
 # on Windows too (it expands to 0x0D 0x0A otherwise).
 STDOUT.binmode
+STDIN.binmode
 
 =begin
 RCS fast-export version: set to `git` in the repository, but can be overridden
@@ -533,6 +534,20 @@ module RCS
 				when :head
 					if opts[:expand_keywords]
 						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
+#AMJ - Begin changes
+					elsif lines.first.chomp.eql?('))[(###%%%~~~StoreCompleteRevision))[(###%%%~~~')
+						myBinFile = rcsfile + ',f/' + rev + '_1'
+						myBinLines = ::File.open(myBinFile, 'rb') { |f| f.read }
+						rcs.revision[rev].text.replace [myBinLines]
+					elsif lines.first.chomp.eql?('))[(###%%%~~~StoreZippedRevision))[(###%%%~~~')
+						myZipFile = rcsfile + ',f/' + rev + '_2'
+						myZipBase = ::File::basename(rcsfile, ',v')
+						myZipCmd = "unzip -p #{myZipFile} #{myZipBase}"
+						alert 'Unzipping with command ' + myZipCmd, 'Trying'
+						myZipLines = `#{myZipCmd}`
+						myZipLines = IO.binread("|#{myZipCmd}")
+						rcs.revision[rev].text.replace [myZipLines]
+#AMJ - End changes
 					else
 						rcs.revision[rev].text.replace lines.dup
 					end
