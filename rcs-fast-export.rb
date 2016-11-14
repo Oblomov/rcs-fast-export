@@ -389,6 +389,7 @@ module RCS
 	end
 
 	def RCS.parse(fname, rcsfile, opts={})
+		csrcsType = 0
 		rcs = RCS::File.new(fname, ::File.executable?(rcsfile))
 
 		::File.open(rcsfile, 'r:ASCII-8BIT') do |file|
@@ -532,29 +533,46 @@ module RCS
 					rcs.revision[rev].log.replace lines.dup
 					status.pop
 				when :head
-					if opts[:expand_keywords]
-						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
-#AMJ - Begin changes
-					elsif lines.first.chomp.eql?('))[(###%%%~~~StoreCompleteRevision))[(###%%%~~~')
+#AMJ - Begin changes for CS-RCS
+# You can probably do something clever with regex matching here, but simple string compare is fine.
+					if lines.first.chomp.eql?('))[(###%%%~~~StoreCompleteRevision))[(###%%%~~~')
+						# This can be modularised, because the code repeats, I just wanted it to work.
+						csrcsType = 1 # Remember what type this is
 						myBinFile = rcsfile + ',f/' + rev + '_1'
 						myBinLines = ::File.open(myBinFile, 'rb') { |f| f.read }
 						rcs.revision[rev].text.replace [myBinLines]
 					elsif lines.first.chomp.eql?('))[(###%%%~~~StoreZippedRevision))[(###%%%~~~')
+						csrcsType = 2 # Remember what type this is
 						myZipFile = rcsfile + ',f/' + rev + '_2'
 						myZipBase = ::File::basename(rcsfile, ',v')
 						myZipCmd = "unzip -p #{myZipFile} #{myZipBase}"
-						alert 'Unzipping with command ' + myZipCmd, 'Trying'
-						myZipLines = `#{myZipCmd}`
 						myZipLines = IO.binread("|#{myZipCmd}")
 						rcs.revision[rev].text.replace [myZipLines]
 #AMJ - End changes
+					elsif opts[:expand_keywords]
+						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
 					else
 						rcs.revision[rev].text.replace lines.dup
 					end
 					puts rcs.revision[rev].blob
 					status.pop
 				when :diff
-					if opts[:expand_keywords]
+#AMJ - Begin changes for CS-RCS
+# A bit lazy here - I'm not checking that the "diff" is actually "@@", because it always is,
+# in the files I've seen. I don't think this will likely be false, but an error in case it is?
+					if csrcsType == 1
+						# Again, you could modularise this. Exactly the same as the code above.
+						myBinFile = rcsfile + ',f/' + rev + '_1'
+						myBinLines = ::File.open(myBinFile, 'rb') { |f| f.read }
+						rcs.revision[rev].text.replace [myBinLines]
+					elsif csrcsType == 2
+						myZipFile = rcsfile + ',f/' + rev + '_2'
+						myZipBase = ::File::basename(rcsfile, ',v')
+						myZipCmd = "unzip -p #{myZipFile} #{myZipBase}"
+						myZipLines = IO.binread("|#{myZipCmd}")
+						rcs.revision[rev].text.replace [myZipLines]
+#AMJ - End changes
+					elsif opts[:expand_keywords]
 						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
 					else
 						difflines.replace lines.dup
