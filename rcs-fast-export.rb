@@ -27,6 +27,8 @@ TODO
 require 'pp'
 require 'set'
 
+require 'shellwords'
+
 class NoBranchSupport < NotImplementedError ; end
 
 # Integer#odd? was introduced in Ruby 1.8.7, backport it to
@@ -379,7 +381,7 @@ module RCS
 	# TODO: what if a revision does not end with newline?
 	# TODO this should be done internally, not piping out to RCS
 	def RCS.expand_keywords(rcsfile, revision)
-		ret = ::File.read("|co -q -p#{revision} #{rcsfile}")
+		ret = ::File.read("|co -q -p#{revision} #{Shellwords.escape rcsfile}")
 		lines = []
 		ret.each_line do |line|
 			lines << line
