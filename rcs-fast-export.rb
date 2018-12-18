@@ -569,8 +569,7 @@ module RCS
 							raise 'no diff base!'
 						end
 						# deep copy
-						buffer = []
-						rcs.revision[base].text.each { |l| buffer << [l.dup] }
+						buffer = rcs.revision[base].text.map { |l| [l] }
 
 						adding = false
 						index = nil
