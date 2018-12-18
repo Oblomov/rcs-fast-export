@@ -619,7 +619,6 @@ module RCS
 						end
 
 						# turn the buffer into an array of lines, deleting the empty ones
-						buffer.delete_if { |l| l.empty? }
 						buffer.flatten!
 
 						rcs.revision[rev].text = buffer
