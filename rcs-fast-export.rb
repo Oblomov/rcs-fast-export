@@ -28,6 +28,7 @@ require 'pp'
 require 'set'
 
 require 'shellwords'
+require 'digest'
 
 class NoBranchSupport < NotImplementedError ; end
 
@@ -348,8 +349,8 @@ module RCS
 
 	class Revision
 		attr_accessor :rev, :author, :state, :next
-		attr_accessor :branches, :log, :text, :symbols
-		attr_accessor :branch, :diff_base, :branch_point
+		attr_accessor :branches, :log, :text, :text_hash, :symbols
+		attr_accessor :branch, :diff_base, :branch_point, :is_branch_base
 		attr_reader   :date
 		def initialize(file, rev)
 			@file = file
@@ -361,9 +362,11 @@ module RCS
 			@branches = Set.new
 			@branch = nil
 			@branch_point = nil
+			@is_branch_base = false
 			@diff_base = nil
 			@log = []
 			@text = []
+			@text_hash = nil
 			@symbols = Set.new
 		end
 
@@ -395,6 +398,7 @@ module RCS
 		::File.open(rcsfile, 'rb') do |file|
 			status = [:basic]
 			rev = nil
+			prev_rev = nil
 			lines = []
 			difflines = []
 			file.each_line do |line|
@@ -418,6 +422,12 @@ module RCS
 					when 'comment'
 						rcs.comment = RCS.at_clean(args.chomp)
 					when /^[0-9.]+$/
+						# delete commit text of previous revision unless it is a branch point 
+						# no need to keep text around which will no longer be accessed
+						if prev_rev and not rcs.revision[prev_rev].is_branch_base and rcs.revision[prev_rev].text and rcs.revision[prev_rev].text.length > 0
+							rcs.revision[prev_rev].text = nil
+						end
+						prev_rev = rev
 						rev = command.dup
 						if rcs.has_revision?(rev)
 							status.push :revision_data
@@ -511,6 +521,7 @@ module RCS
 						rcs.revision[branch].branch = branch.sub(/\.\d+$/,'.x')
 						rcs.revision[branch].branch_point = rev
 					end
+					rcs.revision[rev].is_branch_base = true
 					status.pop if candidate.length > 1
 				when :revision_data
 					case line.chomp
@@ -538,6 +549,7 @@ module RCS
 					else
 						rcs.revision[rev].text.replace lines.dup
 					end
+					rcs.revision[rev].text_hash = Digest::SHA256.digest rcs.revision[rev].text.join('')
 					puts rcs.revision[rev].blob
 					status.pop
 				when :diff
@@ -612,6 +624,7 @@ module RCS
 
 						rcs.revision[rev].text = buffer
 					end
+					rcs.revision[rev].text_hash = Digest::SHA256.digest rcs.revision[rev].text.join('')
 					puts rcs.revision[rev].blob
 					status.pop
 				else
@@ -661,7 +674,7 @@ module RCS
 				else
 					str = "re-adding existing file #{rcs.fname} (old: #{[prev.rev, prev.log.to_s].inspect}, new: #{[rev.rev, rev.log.to_s].inspect})"
 				end
-				if prev.text != rev.text
+				if prev.text_hash != rev.text_hash
 					raise str
 				else
 					@commit.warn_about str
