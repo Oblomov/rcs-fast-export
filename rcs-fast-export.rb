@@ -461,7 +461,7 @@ module RCS
 						end
 					end
 				when :desc
-					rcs.desc.replace lines.dup
+					rcs.desc.replace lines
 					status.pop
 				when :read_lines
 					# we sanitize lines as we read them
@@ -541,13 +541,13 @@ module RCS
 						status.pop
 					end
 				when :log
-					rcs.revision[rev].log.replace lines.dup
+					rcs.revision[rev].log.replace lines
 					status.pop
 				when :head
 					if opts[:expand_keywords]
 						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
 					else
-						rcs.revision[rev].text.replace lines.dup
+						rcs.revision[rev].text.replace lines
 					end
 					rcs.revision[rev].text_hash = Digest::SHA256.digest rcs.revision[rev].text.join('')
 					puts rcs.revision[rev].blob
@@ -556,7 +556,7 @@ module RCS
 					if opts[:expand_keywords]
 						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
 					else
-						difflines.replace lines.dup
+						difflines.replace lines
 						difflines.pop if difflines.last.empty?
 						if difflines.first.chomp.empty?
 							alert "malformed diff: empty initial line @ #{rcsfile}:#{file.lineno-difflines.length-1}", "skipping"
