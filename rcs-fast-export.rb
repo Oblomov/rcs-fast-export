@@ -569,7 +569,9 @@ module RCS
 							raise 'no diff base!'
 						end
 						# deep copy
-						buffer = rcs.revision[base].text.map { |l| [l] }
+						buffer = []
+						start = 0
+						text = rcs.revision[base].text
 
 						adding = false
 						index = nil
@@ -579,14 +581,10 @@ module RCS
 							if adding
 								raise 'negative index during insertion' if index < 0
 								raise 'negative count during insertion' if count < 0
-								adding << l
+								buffer << l
 								count -= 1
 								# collected all the lines, put the before
 								unless count > 0
-									unless buffer[index]
-										buffer[index] = []
-									end
-									buffer[index].unshift(*adding)
 									adding = false
 								end
 								next
@@ -604,21 +602,28 @@ module RCS
 								index -= 1
 								# we replace them with empty string so that 'a' commands
 								# referring to the same line work properly
-								while count > 0
-									buffer[index].clear
-									index += 1
-									count -= 1
+								while start < index
+									buffer << text[start]
+									start += 1
 								end
+								start += count
 							when :a
 								# addition will prepend the appropriate lines
 								# to the given index, and in this case Ruby
 								# and diff indices are the same
-								adding = []
+								adding = true
+								while start < index
+									buffer << text[start]
+									start += 1
+								end
 							end
 						end
 
-						# turn the buffer into an array of lines, deleting the empty ones
-						buffer.flatten!
+						text_length = text.length
+						while start < text_length
+							buffer << text[start]
+							start += 1
+						end
 
 						rcs.revision[rev].text = buffer
 					end
