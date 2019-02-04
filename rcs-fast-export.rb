@@ -28,6 +28,7 @@ require 'pp'
 require 'set'
 
 require 'shellwords'
+require 'digest'
 
 class NoBranchSupport < NotImplementedError ; end
 
@@ -348,8 +349,8 @@ module RCS
 
 	class Revision
 		attr_accessor :rev, :author, :state, :next
-		attr_accessor :branches, :log, :text, :symbols
-		attr_accessor :branch, :diff_base, :branch_point
+		attr_accessor :branches, :log, :text, :text_hash, :symbols
+		attr_accessor :branch, :diff_base, :branch_point, :is_branch_base
 		attr_reader   :date
 		def initialize(file, rev)
 			@file = file
@@ -361,9 +362,11 @@ module RCS
 			@branches = Set.new
 			@branch = nil
 			@branch_point = nil
+			@is_branch_base = false
 			@diff_base = nil
 			@log = []
 			@text = []
+			@text_hash = nil
 			@symbols = Set.new
 		end
 
@@ -395,6 +398,7 @@ module RCS
 		::File.open(rcsfile, 'rb') do |file|
 			status = [:basic]
 			rev = nil
+			prev_rev = nil
 			lines = []
 			difflines = []
 			file.each_line do |line|
@@ -418,6 +422,12 @@ module RCS
 					when 'comment'
 						rcs.comment = RCS.at_clean(args.chomp)
 					when /^[0-9.]+$/
+						# delete commit text of previous revision unless it is a branch point 
+						# no need to keep text around which will no longer be accessed
+						if prev_rev and not rcs.revision[prev_rev].is_branch_base and rcs.revision[prev_rev].text and rcs.revision[prev_rev].text.length > 0
+							rcs.revision[prev_rev].text = nil
+						end
+						prev_rev = rev
 						rev = command.dup
 						if rcs.has_revision?(rev)
 							status.push :revision_data
@@ -451,7 +461,7 @@ module RCS
 						end
 					end
 				when :desc
-					rcs.desc.replace lines.dup
+					rcs.desc.replace lines
 					status.pop
 				when :read_lines
 					# we sanitize lines as we read them
@@ -511,6 +521,7 @@ module RCS
 						rcs.revision[branch].branch = branch.sub(/\.\d+$/,'.x')
 						rcs.revision[branch].branch_point = rev
 					end
+					rcs.revision[rev].is_branch_base = true
 					status.pop if candidate.length > 1
 				when :revision_data
 					case line.chomp
@@ -530,21 +541,22 @@ module RCS
 						status.pop
 					end
 				when :log
-					rcs.revision[rev].log.replace lines.dup
+					rcs.revision[rev].log.replace lines
 					status.pop
 				when :head
 					if opts[:expand_keywords]
 						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
 					else
-						rcs.revision[rev].text.replace lines.dup
+						rcs.revision[rev].text.replace lines
 					end
+					rcs.revision[rev].text_hash = Digest::SHA256.digest rcs.revision[rev].text.join('')
 					puts rcs.revision[rev].blob
 					status.pop
 				when :diff
 					if opts[:expand_keywords]
 						rcs.revision[rev].text.replace RCS.expand_keywords(rcsfile, rev)
 					else
-						difflines.replace lines.dup
+						difflines.replace lines
 						difflines.pop if difflines.last.empty?
 						if difflines.first.chomp.empty?
 							alert "malformed diff: empty initial line @ #{rcsfile}:#{file.lineno-difflines.length-1}", "skipping"
@@ -558,7 +570,8 @@ module RCS
 						end
 						# deep copy
 						buffer = []
-						rcs.revision[base].text.each { |l| buffer << [l.dup] }
+						start = 0
+						text = rcs.revision[base].text
 
 						adding = false
 						index = nil
@@ -568,14 +581,10 @@ module RCS
 							if adding
 								raise 'negative index during insertion' if index < 0
 								raise 'negative count during insertion' if count < 0
-								adding << l
+								buffer << l
 								count -= 1
 								# collected all the lines, put the before
 								unless count > 0
-									unless buffer[index]
-										buffer[index] = []
-									end
-									buffer[index].unshift(*adding)
 									adding = false
 								end
 								next
@@ -593,25 +602,32 @@ module RCS
 								index -= 1
 								# we replace them with empty string so that 'a' commands
 								# referring to the same line work properly
-								while count > 0
-									buffer[index].clear
-									index += 1
-									count -= 1
+								while start < index
+									buffer << text[start]
+									start += 1
 								end
+								start += count
 							when :a
 								# addition will prepend the appropriate lines
 								# to the given index, and in this case Ruby
 								# and diff indices are the same
-								adding = []
+								adding = true
+								while start < index
+									buffer << text[start]
+									start += 1
+								end
 							end
 						end
 
-						# turn the buffer into an array of lines, deleting the empty ones
-						buffer.delete_if { |l| l.empty? }
-						buffer.flatten!
+						text_length = text.length
+						while start < text_length
+							buffer << text[start]
+							start += 1
+						end
 
 						rcs.revision[rev].text = buffer
 					end
+					rcs.revision[rev].text_hash = Digest::SHA256.digest rcs.revision[rev].text.join('')
 					puts rcs.revision[rev].blob
 					status.pop
 				else
@@ -661,7 +677,7 @@ module RCS
 				else
 					str = "re-adding existing file #{rcs.fname} (old: #{[prev.rev, prev.log.to_s].inspect}, new: #{[rev.rev, rev.log.to_s].inspect})"
 				end
-				if prev.text != rev.text
+				if prev.text_hash != rev.text_hash
 					raise str
 				else
 					@commit.warn_about str
