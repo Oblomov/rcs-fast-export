@@ -628,6 +628,11 @@ module RCS
 		rcs.revision.each do |key, rev|
 			if rev.date.nil? and not rev.symbols.empty?
 				top = keys.select { |k| k.match(/^#{key}\./) }.sort.last
+				# assume it's all good if we can't find anything
+				if top == nil
+					branches << key
+					next
+				end
 				tr = rcs.revision[top]
 				raise "unhandled complex branch structure met: #{rev.inspect} refers #{tr.inspect}" if tr.date.nil?
 				tr.branches |= rev.symbols
