@@ -1003,8 +1003,8 @@ file_list.each do |arg|
 			filename = File.basename(rcsfile, SFX)
 			path = File.dirname(rcsfile)
 			# strip trailing "/RCS" if present, or "RCS" if that's
-			# the full path
-			path.sub!(/(^|#{File::SEPARATOR})RCS$/, '')
+			# the full path (case insensitive)
+			path.sub!(/(^|#{File::SEPARATOR})RCS$/i, '')
 			# strip off the portion of the path specified
 			# on the command line from the front of the path
 			# (or delete the path completely if it is the same
