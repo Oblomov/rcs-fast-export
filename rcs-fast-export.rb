@@ -628,6 +628,11 @@ module RCS
 		rcs.revision.each do |key, rev|
 			if rev.date.nil? and not rev.symbols.empty?
 				top = keys.select { |k| k.match(/^#{key}\./) }.sort.last
+				# assume it's all good if we can't find anything
+				if top == nil
+					branches << key
+					next
+				end
 				tr = rcs.revision[top]
 				raise "unhandled complex branch structure met: #{rev.inspect} refers #{tr.inspect}" if tr.date.nil?
 				tr.branches |= rev.symbols
@@ -998,8 +1003,8 @@ file_list.each do |arg|
 			filename = File.basename(rcsfile, SFX)
 			path = File.dirname(rcsfile)
 			# strip trailing "/RCS" if present, or "RCS" if that's
-			# the full path
-			path.sub!(/(^|#{File::SEPARATOR})RCS$/, '')
+			# the full path (case insensitive)
+			path.sub!(/(^|#{File::SEPARATOR})RCS$/i, '')
 			# strip off the portion of the path specified
 			# on the command line from the front of the path
 			# (or delete the path completely if it is the same
