@@ -456,6 +456,8 @@ module RCS
 				when :read_lines
 					# we sanitize lines as we read them
 
+					next if lines.empty? && line.chomp.empty?
+
 					actual_line = line.dup
 
 					# the first line must begin with a @, which we strip
